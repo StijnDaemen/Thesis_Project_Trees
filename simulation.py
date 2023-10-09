@@ -124,7 +124,7 @@ if __name__ == '__main__':
     def connect_to_EMA(years_10, regions, save_location):
         # # Now all parameters must be given in the experiments.py file, this function simply calls it. Must fix later.
         # ConnectToEMA()
-        title_of_run = '200nfe_reference_scenario_lever_search_period_util_global_damages_temp_overshoots'
+        title_of_run = '200 czsnfe_reference_scenario_lever_search_period_util_global_damages_temp_overshoots'
         start = time.time()
         def RICE_wrapper_ema_workbench(years_10,
                                        regions,
