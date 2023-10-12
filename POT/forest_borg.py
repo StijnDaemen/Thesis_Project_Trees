@@ -5,6 +5,7 @@ import copy
 import pandas as pd
 import math
 import time
+import re
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -16,6 +17,9 @@ import matplotlib.patches as patches
 
 from POT.tree import Action
 from POT.tree import Feature
+
+from collections import Counter
+
 
 class ForestBorg:
     def __init__(self, pop_size, master_rng,
@@ -49,6 +53,10 @@ class ForestBorg:
         self.rng_tournament = np.random.default_rng(master_rng.integers(0, 1e9))
         self.rng_population = np.random.default_rng(master_rng.integers(0, 1e9))
         self.rng_revive = np.random.default_rng(master_rng.integers(0, 1e9))
+        self.rng_crossover_subtree = np.random.default_rng(master_rng.integers(0, 1e9))
+        self.rng_mutation_point = np.random.default_rng(master_rng.integers(0, 1e9))
+        self.rng_mutation_subtree = np.random.default_rng(master_rng.integers(0, 1e9))
+        self.rng_choose_operator = np.random.default_rng(master_rng.integers(0, 1e9))
 
         self.model = RICE(years_10, regions)
 
@@ -76,50 +84,74 @@ class ForestBorg:
 
         self.number_of_restarts = 0
 
+        self.GAOperators = {'mutation_point_1': [0],
+                            'mutation_point_2': [0],
+                            'mutation_point_3': [0],
+                            'mutation_subtree_1': [0],
+                            'mutation_subtree_2': [0],
+                            'mutation_subtree_3': [0],
+                            'mutation_random': [0],
+                            }
+
         self.start_time = time.time()
 
 
-        organism = self.spawn()
-        print(organism.dna)
-        print(organism.dna.root)
-        MOEAVisualizations.visualize_tree(self, organism.dna.root)
+        # organism = self.spawn()
+        # print(organism.dna)
+        # print(organism.dna.root)
+        #
+        # MOEAVisualizations.visualize_tree(self, organism.dna.root)
+        # organism.dna = GAOperators.mutation_subtree(self, organism.dna, 2)
+        # MOEAVisualizations.visualize_tree(self, organism.dna.root)
+
+        # MOEAVisualizations.visualize_tree(self, organism.dna.root)
+        # organism.dna = self.mutation_point(organism.dna)
+        # MOEAVisualizations.visualize_tree(self, organism.dna.root)
+        #
+        # organism.dna = self.mutate(organism.dna)
+        # # self.mutate(organism.dna)
+        #
+        # MOEAVisualizations.visualize_tree(self, organism.dna.root)
 
         # MOEAVisualizations.draw_tree()
 
-        # # -- Start algorithm ----------------------------------
-        #
-        # # Generate the initial population
-        # for initial_member in range(self.pop_size):
-        #     self.population.append(self.spawn())
-        #
-        # # Check which solutions are non-dominated
-        # self.non_dominated = self.natural_selection(self.population)
-        # # Add to the Archive
-        # self.Archive = self.non_dominated
-        #
-        # # -- main loop -----------------------------------------
-        #
-        # nfe = 0
-        # log_counter = 0
-        # while nfe < self.max_nfe:
-        #     self.iterate()
-        #     nfe += 1
-        #     log_counter += 1
-        #     if log_counter%10 == 0:
-        #         intermediate_time = time.time()
-        #         print(f'\rnfe: {nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time)/60} min -- number of restarts: {self.number_of_restarts}', end='', flush=True)
-        #
-        # # -- Create visualizations of the run -------------------
-        # self.end_time = time.time()
-        # print(f'Total elapsed time: {(self.end_time-self.start_time)/60} min -- {len(self.Archive)} non-dominated solutions were found.')
-        #
-        # MOEAVisualizations.visualize_generational_series(self, self.epsilon_progress_tracker, x_label='generation', y_label='epsilon-progress')
-        #
-        # population_in_objective_space = []
-        # for member in self.Archive:
-        #     population_in_objective_space.append(member.fitness)
-        # MOEAVisualizations.visualize_organisms_objective_space(self, population_in_objective_space, title=None,
-        #                                                        x_label='welfare', y_label='damages', z_label='temp. overshoots', save=False)
+        # -- Start algorithm ----------------------------------
+
+        # Generate the initial population
+        for initial_member in range(self.pop_size):
+            self.population.append(self.spawn())
+
+        # Check which solutions are non-dominated
+        self.non_dominated = self.natural_selection(self.population)
+        # Add to the Archive
+        self.Archive = self.non_dominated
+
+        # -- main loop -----------------------------------------
+
+        nfe = 0
+        log_counter = 0
+        while nfe < self.max_nfe:
+            self.iterate()
+            nfe += 1
+            log_counter += 1
+            if log_counter%10 == 0:
+                intermediate_time = time.time()
+                print(f'\rnfe: {nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time)/60} min -- number of restarts: {self.number_of_restarts}', end='', flush=True)
+
+        # -- Create visualizations of the run -------------------
+        self.end_time = time.time()
+        print(f'Total elapsed time: {(self.end_time-self.start_time)/60} min -- {len(self.Archive)} non-dominated solutions were found.')
+
+        MOEAVisualizations.visualize_generational_series(self, self.epsilon_progress_tracker, x_label='generation', y_label='epsilon-progress', save=False)
+
+        population_in_objective_space = []
+        for member in self.Archive:
+            population_in_objective_space.append(member.fitness)
+        MOEAVisualizations.visualize_organisms_objective_space(self, population_in_objective_space, title=None,
+                                                               x_label='welfare', y_label='damages', z_label='temp. overshoots', save=False)
+
+        # Visualize operator distribution
+        MOEAVisualizations.visualize_operator_distribution(self, self.GAOperators, title='operator distribution', x_label='Generation', y_label='Count', save=False)
 
     def iterate(self):
         # Check gamma (the population to Archive ratio)
@@ -128,16 +160,16 @@ class ForestBorg:
         # Trigger restart if the latest epsilon tracker value is not different from the previous 3 -> 4ht iteration without progress.
         # Officially in the borg paper I believe it is triggered if the latest epsilon tracker value is the same as the one of that before
         # but that is a bit extreme for this problem as, especially in the first few iterations the Archive is not updated.
-        if len(self.epsilon_progress_tracker) > 3:
-            if self.epsilon_progress_tracker[-1] == (
-                    self.epsilon_progress_tracker[-2] + self.epsilon_progress_tracker[-3] +
-                    self.epsilon_progress_tracker[-4]) / 3:
-                self.revive_search(gamma)
 
+        if self.check_unchanged(self.epsilon_progress_tracker):
+        # if self.epsilon_progress_tracker[-1] == (
+        #         self.epsilon_progress_tracker[-2] + self.epsilon_progress_tracker[-3] +
+        #         self.epsilon_progress_tracker[-4]) / 3:
+            self.revive_search(gamma)
         # Doing this causes many (too many?) restarts
-        # # Check if gamma value warrants a restart (see Figure 2 in paper borg)
-        # if (gamma > 1.25 * self.gamma) or (gamma < 1.25 * self.gamma):
-        #     self.revive_search(gamma)
+        # Check if gamma value warrants a restart (see Figure 2 in paper borg)
+        elif (gamma > 1.25 * self.gamma) or (gamma < 1.25 * self.gamma):
+            self.revive_search(gamma)
 
         # Selection of recombination operator
         parents_required = 2
@@ -149,11 +181,18 @@ class ForestBorg:
             k = self.determine_tournament_size(gamma)
             parents.append(self.tournament(k))
 
+        # # Create the offspring
+        # offspring = Organism()
+        # offspring.dna = self.crossover(parents[0].dna, parents[1].dna)[0]
+        # # Let it mutate (in-built chance of mutation)
+        # offspring.dna = self.mutate(offspring.dna)
+        # offspring.fitness = self.policy_tree_RICE_fitness(offspring.dna)
+        # offspring.operator = ''
+
         # Create the offspring
         offspring = Organism()
-        offspring.dna = self.crossover(parents[0].dna, parents[1].dna)[0]
-        # Let it mutate (in-built chance of mutation)
-        offspring.dna = self.mutate(offspring.dna)
+        offspring.dna = GAOperators.crossover_subtree(self, parents[0].dna, parents[1].dna)[0]
+        offspring = self.mutate_with_feedbackloop(offspring)
         offspring.fitness = self.policy_tree_RICE_fitness(offspring.dna)
 
         # Add to population
@@ -164,7 +203,54 @@ class ForestBorg:
 
         # Update the epsilon progress tracker
         self.epsilon_progress_tracker.append(self.epsilon_progress_counter)
+
+        # Record GA operator distribution
+        self.record_GAOperator_distribution()
         return
+
+    def record_GAOperator_distribution(self):
+        # Count the occurrences of each attribute value
+        distribution = Counter(member.operator for member in self.Archive)
+        for key in self.GAOperators.keys():
+            if key in distribution:
+                self.GAOperators[key].append(distribution[key])
+            else:
+                self.GAOperators[key].append(0)
+        return
+
+    def check_unchanged(self, lst):
+        if len(lst) > 3:
+            for i in range(3, len(lst)):
+                if lst[i - 3] == lst[i - 2] == lst[i - 1]:
+                    return True
+        return False
+
+    def mutate_with_feedbackloop(self, offspring):
+        # TODO:: This is super hacky and bad programming, must change action handling and operator selection after proof-of-concept
+        # Mutation based on performance feedback loop
+        operator = GAOperators.choose_mutation_operator(self)
+        if operator == 'mutation_point_1':
+            offspring.dna = GAOperators.mutation_point(self, offspring.dna, 1)
+            offspring.operator = operator
+        elif operator == 'mutation_point_2':
+            offspring.dna = GAOperators.mutation_point(self, offspring.dna, 2)
+            offspring.operator = operator
+        elif operator == 'mutation_point_3':
+            offspring.dna = GAOperators.mutation_point(self, offspring.dna, 3)
+            offspring.operator = operator
+        elif operator == 'mutation_subtree_1':
+            offspring.dna = GAOperators.mutation_subtree(self, offspring.dna, 1)
+            offspring.operator = operator
+        elif operator == 'mutation_subtree_2':
+            offspring.dna = GAOperators.mutation_subtree(self, offspring.dna, 2)
+            offspring.operator = operator
+        elif operator == 'mutation_subtree_3':
+            offspring.dna = GAOperators.mutation_subtree(self, offspring.dna, 3)
+            offspring.operator = operator
+        elif operator == 'mutation_random':
+            offspring.dna = GAOperators.mutation_random(self, offspring.dna)
+            offspring.operator = operator
+        return offspring
 
     def determine_tournament_size(self, gamma):
         return max(2, int(self.tau * gamma * len(self.Archive)))
@@ -181,7 +267,8 @@ class ForestBorg:
             # Select a random solution from the Archive
             volunteer = self.rng_revive.choice(self.Archive)
             # Mutate new solution
-            volunteer.dna = self.mutate(volunteer.dna)
+            # volunteer.dna = self.mutate(volunteer.dna)
+            volunteer = self.mutate_with_feedbackloop(volunteer)
             volunteer.fitness = self.policy_tree_RICE_fitness(volunteer.dna)
             # Add new solution to population
             self.population.append(volunteer)
@@ -356,8 +443,8 @@ class ForestBorg:
                 elif keep[i] and self.dominates(A[j].fitness, A[i].fitness):
                     keep[i] = False
 
-                elif self.same_box(np.array(A[i].fitness), np.array(A[j].fitness)):
-                    keep[self.rng_natural_selection.choice([i, j])] = False
+                # elif self.same_box(np.array(A[i].fitness), np.array(A[j].fitness)):
+                #     keep[self.rng_natural_selection.choice([i, j])] = False
 
         return list(A[keep])
 
@@ -397,13 +484,22 @@ class ForestBorg:
     def epsilon_dominated(self, a, b):
         # Outputs True if a is epsilon non-dominated by b, False otherwise
         # In this new implementation maximization is assumed -> NEVERMIND
+
+        large_number = 1000000000
+
         a = np.array(a)
+        a = a + large_number
         b = np.array(b)
-        return np.all(a <= b - self.epsilons) and np.any(a < b - self.epsilons)
+        b = b + large_number
+        # print(f'a: {a} -/- b-epsilons: {b-self.epsilons}')
+        # answer = np.all(a <= (b - self.epsilons)) and np.any(a < (b - self.epsilons))
+        # print(answer)
+        # return np.all(a <= (b - self.epsilons)) and np.any(a < (b - self.epsilons))
+        return np.all(a <= b) and np.any(a < b)
 
     def add_to_Archive(self, candidate_solution):
         for idx, member in enumerate(self.Archive):
-            if self.epsilon_dominated(candidate_solution.fitness, member.fitness):
+            if self.epsilon_dominated(candidate_solution.fitness, member.fitness-self.epsilons):
                 self.Archive.pop(idx)
             elif self.epsilon_dominated(member.fitness, candidate_solution.fitness):
                 return False
@@ -437,42 +533,330 @@ class ForestBorg:
             self.population.append(offspring)
         pass
 
+    # def crossover_subtree(self, P1, P2):
+    #     P1, P2 = [copy.deepcopy(P) for P in (P1, P2)]
+    #     # should use indices of ONLY feature nodes
+    #     feature_ix1 = [i for i in range(P1.N) if P1.L[i].is_feature]
+    #     feature_ix2 = [i for i in range(P2.N) if P2.L[i].is_feature]
+    #     index1 = self.rng_crossover_subtree.choice(feature_ix1)
+    #     index2 = self.rng_crossover_subtree.choice(feature_ix2)
+    #     slice1 = P1.get_subtree(index1)
+    #     slice2 = P2.get_subtree(index2)
+    #     P1.L[slice1], P2.L[slice2] = P2.L[slice2], P1.L[slice1]
+    #     P1.build()
+    #     P2.build()
+    #     return (P1, P2)
+    #
+    # # def crossover_homologous(self, P1, P2):
+    # #
+    # #     return P1, P2
+    #
+    # def choose_mutation_operator(self, operators, zeta=1):
+    #     # Initially give every operator an equal chance, then feedback loop based on occuranc ein self.Archive
+    #     operator_dict = {}
+    #     for operator in operators:
+    #         num_solutions_operator = 0
+    #         for member in self.Archive:
+    #             if member.operator == operator:
+    #                 num_solutions_operator += 1
+    #         operator_dict[operator] = num_solutions_operator+zeta
+    #
+    #     probability_dict = {}
+    #     for operator in operator_dict.keys():
+    #         #     resultset = np.array([value for key, value in operator_dict.items() if key not in operator]).sum()
+    #         resultset = np.array([value for key, value in operator_dict.items()]).sum()
+    #         probability = operator_dict[operator] / (resultset)
+    #         probability_dict[operator] = probability
+    #
+    #     return self.rng_choose_operator.choice(list(probability_dict.keys()), p=list(probability_dict.values()))
+    #
+    # def mutation_subtree(self, T):
+    #     T = copy.deepcopy(T)
+    #     # should use indices of ONLY feature nodes
+    #     feature_ix = [i for i in range(T.N) if T.L[i].is_feature]
+    #     index = self.rng_mutation_subtree.choice(feature_ix)
+    #     slice = T.get_subtree(index)
+    #     for node in T.L[slice]:
+    #         if node.is_feature:  # if isinstance(node, Feature):
+    #             low, high = self.feature_bounds[node.index]
+    #             if node.is_discrete:
+    #                 node.threshold = self.rng_mutation_subtree.integers(low, high + 1)
+    #             else:
+    #                 node.threshold = self.bounded_gaussian(
+    #                     node.threshold, [low, high])
+    #         else:
+    #             if self.discrete_actions:
+    #                 node.value = str(self.rng_mutation_subtree.choice(self.action_names))
+    #             else:
+    #                 # print(item)
+    #                 # print(self.action_bounds)
+    #                 # print(item.value)
+    #                 # item.value = self.bounded_gaussian(
+    #                 #     item.value, self.action_bounds)
+    #
+    #                 # --------
+    #                 # a = np.random.choice(len(self.action_names))  # SD changed
+    #                 # action_name = self.action_names[a]
+    #                 # action_value = np.random.uniform(*self.action_bounds[a])
+    #                 # action_input = f'{action_name}_{action_value}'
+    #                 # # print(action_input)
+    #                 # item.value = action_input
+    #
+    #                 # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
+    #                 action_input = f'miu_{self.rng_mutation_subtree.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)}'
+    #                 node.value = action_input
+    #     return T
+    #
+    # def mutation_point(self, T):
+    #     # Point mutation at either feature or action node
+    #     T = copy.deepcopy(T)
+    #     item = self.rng_mutation_point.choice(T.L)
+    #     if item.is_feature:
+    #         low, high = self.feature_bounds[item.index]
+    #         if item.is_discrete:
+    #             item.threshold = self.rng_mutate.integers(low, high + 1)
+    #         else:
+    #             item.threshold = self.bounded_gaussian(
+    #                 item.threshold, [low, high])
+    #     if self.discrete_actions:
+    #         item.value = str(self.rng_mutate.choice(self.action_names))
+    #     else:
+    #         # print(item)
+    #         # print(self.action_bounds)
+    #         # print(item.value)
+    #         # item.value = self.bounded_gaussian(
+    #         #     item.value, self.action_bounds)
+    #
+    #         # --------
+    #         # a = np.random.choice(len(self.action_names))  # SD changed
+    #         # action_name = self.action_names[a]
+    #         # action_value = np.random.uniform(*self.action_bounds[a])
+    #         # action_input = f'{action_name}_{action_value}'
+    #         # # print(action_input)
+    #         # item.value = action_input
+    #
+    #         # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
+    #         action_input = f'miu_{self.rng_mutate.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutate.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_mutate.uniform(*self.action_bounds[2]), 3)}'
+    #         item.value = action_input
+    #     return T
+
+    # def mutation_shrink(self, T):
+    #
+    #     return T
+    #
+    # def mutation_expansion(self, T):
+    #
+    #     return T
+
+
+class GAOperators(ForestBorg):
+    # TODO:: actions are hardcoded in, plus putting them in a string like this is very hacky. Generalize and redesign action handling (rn I just need it to work and I had better ask for help from someone who is better at programming than me)
+    def replace_miu_substr(self, input_str, replacement):
+        # The pattern will find a string that starts with "miu_" and ends with "|".
+        pattern = re.compile(r'miu_.*?\|')
+        # re.sub replaces the matched pattern with the specified replacement string.
+        return re.sub(pattern, replacement, input_str)
+
+    def replace_sr_substr(self, input_str, replacement):
+        # The pattern will find a string that starts with "miu_" and ends with "|".
+        pattern = re.compile(r'sr_.*?\|')
+        # re.sub replaces the matched pattern with the specified replacement string.
+        return re.sub(pattern, replacement, input_str)
+
+    def replace_irstp_substr(self, input_str, replacement):
+        # The pattern will find a string that starts with "miu_" and ends with "|".
+        pattern = re.compile(r'irstp_.*')
+        # re.sub replaces the matched pattern with the specified replacement string.
+        return re.sub(pattern, replacement, input_str)
+
+    def choose_mutation_operator(self, zeta=1):
+        operators = ['mutation_point_1',
+                     'mutation_point_2',
+                     'mutation_point_3',
+                     'mutation_subtree_1',
+                     'mutation_subtree_2',
+                     'mutation_subtree_3',
+                     'mutation_random']
+        # Initially give every operator an equal chance, then feedback loop based on occurance in self.Archive
+        operator_dict = {}
+        for operator in operators:
+            num_solutions_operator = 0
+            for member in self.Archive:
+                if member.operator == operator:
+                    num_solutions_operator += 1
+            operator_dict[operator] = num_solutions_operator+zeta
+
+        probability_dict = {}
+        for operator in operator_dict.keys():
+            #     resultset = np.array([value for key, value in operator_dict.items() if key not in operator]).sum()
+            resultset = np.array([value for key, value in operator_dict.items()]).sum()
+            probability = operator_dict[operator] / (resultset)
+            probability_dict[operator] = probability
+
+        return self.rng_choose_operator.choice(list(probability_dict.keys()), p=list(probability_dict.values()))
+
+    def crossover_subtree(self, P1, P2):
+        P1, P2 = [copy.deepcopy(P) for P in (P1, P2)]
+        # should use indices of ONLY feature nodes
+        feature_ix1 = [i for i in range(P1.N) if P1.L[i].is_feature]
+        feature_ix2 = [i for i in range(P2.N) if P2.L[i].is_feature]
+        index1 = self.rng_crossover_subtree.choice(feature_ix1)
+        index2 = self.rng_crossover_subtree.choice(feature_ix2)
+        slice1 = P1.get_subtree(index1)
+        slice2 = P2.get_subtree(index2)
+        P1.L[slice1], P2.L[slice2] = P2.L[slice2], P1.L[slice1]
+        P1.build()
+        P2.build()
+        return (P1, P2)
+
+    # def crossover_homologous(self, P1, P2):
+    #
+    #     return P1, P2
+
+    def mutation_subtree(self, T, nr_actions):
+        T = copy.deepcopy(T)
+        # should use indices of ONLY feature nodes
+        feature_ix = [i for i in range(T.N) if T.L[i].is_feature]
+        index = self.rng_mutation_subtree.choice(feature_ix)
+        slice = T.get_subtree(index)
+        for node in T.L[slice]:
+            if node.is_feature:  # if isinstance(node, Feature):
+                low, high = self.feature_bounds[node.index]
+                if node.is_discrete:
+                    node.threshold = self.rng_mutation_subtree.integers(low, high + 1)
+                else:
+                    node.threshold = self.bounded_gaussian(
+                        node.threshold, [low, high])
+            else:
+                if self.discrete_actions:
+                    node.value = str(self.rng_mutation_subtree.choice(self.action_names))
+                else:
+                    # print(item)
+                    # print(self.action_bounds)
+                    # print(item.value)
+                    # item.value = self.bounded_gaussian(
+                    #     item.value, self.action_bounds)
+
+                    # --------
+                    # a = np.random.choice(len(self.action_names))  # SD changed
+                    # action_name = self.action_names[a]
+                    # action_value = np.random.uniform(*self.action_bounds[a])
+                    # action_input = f'{action_name}_{action_value}'
+                    # # print(action_input)
+                    # item.value = action_input
+
+                    # # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
+                    # action_input = f'miu_{self.rng_mutation_subtree.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)}'
+                    # node.value = action_input
+
+                    actions = self.rng_mutation_subtree.choice(self.action_names, nr_actions, replace=False)
+                    for action_name in actions:
+                        if action_name == 'miu':
+                            action_value = self.rng_mutation_subtree.integers(*self.action_bounds[0])
+                            node.value = GAOperators.replace_miu_substr(self, node.value, f'miu_{action_value}|')
+                        elif action_name == 'sr':
+                            action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)
+                            node.value = GAOperators.replace_sr_substr(self, node.value, f'sr_{action_value}|')
+                        elif action_name == 'irstp':
+                            action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)
+                            node.value = GAOperators.replace_irstp_substr(self, node.value, f'irstp_{action_value}')
+        return T
+
+    def mutation_point(self, T, nr_actions):
+        # Point mutation at either feature or action node
+        T = copy.deepcopy(T)
+        item = self.rng_mutation_point.choice(T.L)
+        if item.is_feature:
+            low, high = self.feature_bounds[item.index]
+            if item.is_discrete:
+                item.threshold = self.rng_mutate.integers(low, high + 1)
+            else:
+                item.threshold = self.bounded_gaussian(
+                    item.threshold, [low, high])
+        else:
+            if self.discrete_actions:
+                item.value = str(self.rng_mutate.choice(self.action_names))
+            else:
+                # print(item)
+                # print(self.action_bounds)
+                # print(item.value)
+                # item.value = self.bounded_gaussian(
+                #     item.value, self.action_bounds)
+
+                # --------
+                # a = np.random.choice(len(self.action_names))  # SD changed
+                # action_name = self.action_names[a]
+                # action_value = np.random.uniform(*self.action_bounds[a])
+                # action_input = f'{action_name}_{action_value}'
+                # # print(action_input)
+                # item.value = action_input
+
+                # # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
+                # action_input = f'miu_{self.rng_mutate.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutate.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_mutate.uniform(*self.action_bounds[2]), 3)}'
+                # item.value = action_input
+
+                actions = self.rng_mutation_subtree.choice(self.action_names, nr_actions, replace=False)
+                for action_name in actions:
+                    if action_name == 'miu':
+                        action_value = self.rng_mutation_subtree.integers(*self.action_bounds[0])
+                        item.value = GAOperators.replace_miu_substr(self, item.value, f'miu_{action_value}|')
+                    elif action_name == 'sr':
+                        action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)
+                        item.value = GAOperators.replace_sr_substr(self, item.value, f'sr_{action_value}|')
+                    elif action_name == 'irstp':
+                        action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)
+                        item.value = GAOperators.replace_irstp_substr(self, item.value, f'irstp_{action_value}')
+        return T
+
+    def mutation_random(self, P, mutate_actions=True):
+        P = copy.deepcopy(P)
+
+        for item in P.L:
+            if self.rng_mutate.random() < self.mutation_prob:
+                if item.is_feature:
+                    low, high = self.feature_bounds[item.index]
+                    if item.is_discrete:
+                        item.threshold = self.rng_mutate.integers(low, high + 1)
+                    else:
+                        item.threshold = self.bounded_gaussian(
+                            item.threshold, [low, high])
+                elif mutate_actions:
+                    if self.discrete_actions:
+                        item.value = str(self.rng_mutate.choice(self.action_names))
+                    else:
+                        # print(item)
+                        # print(self.action_bounds)
+                        # print(item.value)
+                        # item.value = self.bounded_gaussian(
+                        #     item.value, self.action_bounds)
+
+                        # --------
+                        # a = np.random.choice(len(self.action_names))  # SD changed
+                        # action_name = self.action_names[a]
+                        # action_value = np.random.uniform(*self.action_bounds[a])
+                        # action_input = f'{action_name}_{action_value}'
+                        # # print(action_input)
+                        # item.value = action_input
+
+                        # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
+                        action_input = f'miu_{self.rng_mutate.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutate.uniform(*self.action_bounds[1]),3 )}|irstp_{round(self.rng_mutate.uniform(*self.action_bounds[2]), 3)}'
+                        item.value = action_input
+
+        return P
+
 
 class Organism:
     def __init__(self):
         self.dna = None
         self.fitness = None
-
-    def crossover_subtree(self, P1, P2):
-
-        return P1, P2
-
-    def crossover_homologous(self, P1, P2):
-
-        return P1, P2
-
-    def mutation_subtree(self, T):
-
-        return T
-
-    def muatation_point(self, T):
-
-        return T
-    
-    def mutation_shrink(self, T):
-
-        return T
-
-    def mutation_expansion(self, T):
-
-        return T
+        self.operator = None
 
 
 class MOEAVisualizations:
     def __init__(self):
         pass
 
-    def visualize_generational_series(self, series, title=None, x_label=None, y_label=None, save=None):
+    def visualize_generational_series(self, series, title=None, x_label=None, y_label=None, save=False):
         x = [x for x in range(len(series))]
         y = series
         plt.scatter(x, y)
@@ -622,6 +1006,69 @@ class MOEAVisualizations:
         root = preorder_traversal(root)
         draw_tree(root)
 
+    def visualize_operator_distribution(self, distribution_dict, title=None, x_label=None, y_label=None, save=False):
+        index_rng = [x for x in range(len(list(distribution_dict.values())[0]))]
+        data = distribution_dict
+
+        df = pd.DataFrame(data, index=index_rng)
+
+        fig, ax = plt.subplots()
+
+        # Stacked area chart
+        ax.stackplot(df.index, df.T, labels=df.columns, alpha=0.5)
+
+        # Additional chart formatting
+        ax.set_ylabel(y_label)
+        ax.set_ylabel(x_label)
+        ax.set_title(title)
+        ax.legend(loc='upper left')
+
+        plt.tight_layout()
+        if save:
+            plt.savefig(f'{title}.png', bbox_inches='tight')
+        else:
+            plt.show()
+        # Make sure to close the plt object once done
+        plt.close()
+
+        # -- The commented out code below works only for small dictionaries, not for large time/generational series-----
+        #
+        # # Data where keys are intended to be colors (segments) and each list represents a column in the bar chart.
+        # data = distribution_dict
+        #
+        # fig, ax = plt.subplots()
+        #
+        # # Labels for each column
+        # labels = [f'{i}' for i in range(len(next(iter(data.values()))))]
+        #
+        # # Ensure consistent data lengths
+        # assert all(len(v) == len(next(iter(data.values()))) for v in data.values()), "Mismatched data lengths"
+        #
+        # # Initialize cumulative size variable
+        # cumulative_size = [0] * len(labels)
+        #
+        # # Loop through data and create stacked bars
+        # for color, segment_data in data.items():
+        #     ax.bar(labels, segment_data, label=color, bottom=cumulative_size)
+        #
+        #     # Update the cumulative size
+        #     cumulative_size = [cum_size + seg_data for cum_size, seg_data in zip(cumulative_size, segment_data)]
+        #
+        # # Format and display the plot
+        # ax.set_ylabel(y_label)
+        # ax.set_xlabel(x_label)
+        # ax.set_title(title)
+        # ax.legend()
+        #
+        # plt.tight_layout()
+        # if save:
+        #     plt.savefig(f'{title}.png', bbox_inches='tight')
+        # else:
+        #     plt.show()
+        # # Make sure to close the plt object once done
+        # plt.close()
+        pass
+
 
 if __name__ == '__main__':
     years_10 = []
@@ -657,7 +1104,7 @@ if __name__ == '__main__':
                   discrete_features=False,
                   # Optimization variables
                   mutation_prob=0.5,
-                  max_nfe=3000,
+                  max_nfe=5000,
                   epsilons=np.array([0.05, 0.05, 0.05]),
                   gamma=4,
                   tau=0.02,
