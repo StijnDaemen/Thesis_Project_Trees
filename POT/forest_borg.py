@@ -73,14 +73,14 @@ class ForestBorg:
         self.epsilons = epsilons
         self.gamma = gamma
         self.tau = tau
+        self.tournament_size = 2
 
-        self.population = []
-        self.non_dominated = []
-        self.pareto_front = []
+        # self.non_dominated = []
+        # self.pareto_front = []
         # THE epsilon dominance archive which is to ensure convergence and diversity.
-        self.Archive = []
+        self.Archive = np.zeros(self.pop_size)
         self.epsilon_progress_counter = 0
-        self.epsilon_progress_tracker = []
+        self.epsilon_progress_tracker = np.zeros(self.max_nfe)
 
         self.number_of_restarts = 0
 
@@ -92,6 +92,8 @@ class ForestBorg:
                             'mutation_subtree_3': [0],
                             'mutation_random': [0],
                             }
+
+        self.nfe = 0
 
         self.start_time = time.time()
 
@@ -116,27 +118,43 @@ class ForestBorg:
         # MOEAVisualizations.draw_tree()
 
         # -- Start algorithm ----------------------------------
-
         # Generate the initial population
-        for initial_member in range(self.pop_size):
-            self.population.append(self.spawn())
+        self.population = np.array([self.spawn() for _ in range(self.pop_size)])
+        for elem in self.population:
+            print(elem.fitness)
+        print(f'size pop: {np.size(self.population)}')
 
-        # Check which solutions are non-dominated
-        self.non_dominated = self.natural_selection(self.population)
-        # Add to the Archive
-        self.Archive = self.non_dominated
+        # Add the epsilon non-dominated solutions from the population to the Archive (initialize the Archive with the initial population, running add_to_Archive() function ensures no duplicates will be present.
+        self.Archive = np.array([self.population[0]])
+        for sol in self.population:
+            self.add_to_Archive(sol)
+        print(f'size Archive: {np.size(self.Archive)}')
+        # for elem in self.Archive:
+        #     print(elem.fitness)
+        #
+        # # Check which solutions are non-dominated
+        # self.non_dominated = self.natural_selection(self.population)
+        # # Add to the Archive
+        # self.Archive = self.non_dominated
+        # print(len(self.Archive))
+        # for elem in self.Archive:
+        #     print(elem.fitness)
+        #
+        # # Check which solutions are epsilon non-dominated and add them to the Archive
+        # self.Archive = self.natural_selection_epsilon(self.population)
+        # print(len(self.Archive))
 
         # -- main loop -----------------------------------------
 
         nfe = 0
         log_counter = 0
-        while nfe < self.max_nfe:
-            self.iterate()
+        while self.nfe < self.max_nfe:
+            self.iterate(nfe)
             nfe += 1
             log_counter += 1
             if log_counter%10 == 0:
                 intermediate_time = time.time()
-                print(f'\rnfe: {nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time)/60} min -- number of restarts: {self.number_of_restarts}', end='', flush=True)
+                print(f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time)/60} min -- number of restarts: {self.number_of_restarts}', end='', flush=True)
 
         # -- Create visualizations of the run -------------------
         self.end_time = time.time()
@@ -144,32 +162,38 @@ class ForestBorg:
 
         MOEAVisualizations.visualize_generational_series(self, self.epsilon_progress_tracker, x_label='generation', y_label='epsilon-progress', save=False)
 
-        population_in_objective_space = []
+        Archive_in_objective_space = []
         for member in self.Archive:
-            population_in_objective_space.append(member.fitness)
-        MOEAVisualizations.visualize_organisms_objective_space(self, population_in_objective_space, title=None,
+            Archive_in_objective_space.append(member.fitness)
+        print(Archive_in_objective_space)
+        MOEAVisualizations.visualize_organisms_objective_space(self, Archive_in_objective_space, title=None,
                                                                x_label='welfare', y_label='damages', z_label='temp. overshoots', save=False)
 
         # Visualize operator distribution
         MOEAVisualizations.visualize_operator_distribution(self, self.GAOperators, title='operator distribution', x_label='Generation', y_label='Count', save=False)
 
-    def iterate(self):
-        # Check gamma (the population to Archive ratio)
-        gamma = len(self.population) / len(self.Archive)
+    def iterate(self, i):
+        if i%100 == 0:
+            # Check gamma (the population to Archive ratio)
+            gamma = len(self.population) / len(self.Archive)
+            print(f'gamma: {gamma}')
 
-        # Trigger restart if the latest epsilon tracker value is not different from the previous 3 -> 4ht iteration without progress.
-        # Officially in the borg paper I believe it is triggered if the latest epsilon tracker value is the same as the one of that before
-        # but that is a bit extreme for this problem as, especially in the first few iterations the Archive is not updated.
+            # Trigger restart if the latest epsilon tracker value is not different from the previous 3 -> 4ht iteration without progress.
+            # Officially in the borg paper I believe it is triggered if the latest epsilon tracker value is the same as the one of that before
+            # but that is a bit extreme for this problem as, especially in the first few iterations the Archive is not updated.
 
-        if self.check_unchanged(self.epsilon_progress_tracker):
-        # if self.epsilon_progress_tracker[-1] == (
-        #         self.epsilon_progress_tracker[-2] + self.epsilon_progress_tracker[-3] +
-        #         self.epsilon_progress_tracker[-4]) / 3:
-            self.revive_search(gamma)
-        # Doing this causes many (too many?) restarts
-        # Check if gamma value warrants a restart (see Figure 2 in paper borg)
-        elif (gamma > 1.25 * self.gamma) or (gamma < 1.25 * self.gamma):
-            self.revive_search(gamma)
+            if self.check_unchanged(self.epsilon_progress_tracker):
+            # if self.epsilon_progress_tracker[-1] == (
+            #         self.epsilon_progress_tracker[-2] + self.epsilon_progress_tracker[-3] +
+            #         self.epsilon_progress_tracker[-4]) / 3:
+                self.revive_search(gamma)
+            # Doing this causes many (too many?) restarts
+            # Check if gamma value warrants a restart (see Figure 2 in paper borg)
+            elif (gamma > 1.25 * self.gamma) or (gamma < 0.75 * self.gamma):
+                self.revive_search(gamma)
+        # if len(self.epsilon_progress_tracker) > 50:
+        #     if gamma < 0.75 * self.gamma:
+        #         self.revive_search(gamma)
 
         # Selection of recombination operator
         parents_required = 2
@@ -178,8 +202,8 @@ class ForestBorg:
         parents.append(self.rng_iterate.choice(self.Archive))
         # The other parent(s) are selected from the population using tournament selection
         for parent in range(parents_required-1):
-            k = self.determine_tournament_size(gamma)
-            parents.append(self.tournament(k))
+            # k = self.determine_tournament_size(len(self.population) / len(self.Archive))
+            parents.append(self.tournament(self.tournament_size))
 
         # # Create the offspring
         # offspring = Organism()
@@ -194,6 +218,7 @@ class ForestBorg:
         offspring.dna = GAOperators.crossover_subtree(self, parents[0].dna, parents[1].dna)[0]
         offspring = self.mutate_with_feedbackloop(offspring)
         offspring.fitness = self.policy_tree_RICE_fitness(offspring.dna)
+        self.nfe += 1
 
         # Add to population
         self.add_to_population(offspring)
@@ -202,7 +227,8 @@ class ForestBorg:
         self.add_to_Archive(offspring)
 
         # Update the epsilon progress tracker
-        self.epsilon_progress_tracker.append(self.epsilon_progress_counter)
+        # self.epsilon_progress_tracker.append(self.epsilon_progress_counter)
+        self.epsilon_progress_tracker = np.append(self.epsilon_progress_tracker, self.epsilon_progress_counter)
 
         # Record GA operator distribution
         self.record_GAOperator_distribution()
@@ -252,16 +278,18 @@ class ForestBorg:
             offspring.operator = operator
         return offspring
 
-    def determine_tournament_size(self, gamma):
-        return max(2, int(self.tau * gamma * len(self.Archive)))
+    # def determine_tournament_size(self, gamma):
+    #     return max(2, int(self.tau * gamma * len(self.Archive)))
 
     def revive_search(self, gamma):
+        print(f'population_size before: {len(self.population)}')
+        print(f'archive_size before: {len(self.Archive)}')
         # Empty the population
         self.population = []
         # Fill it with all solutions from the Archive
         self.population = self.Archive
         # Compute size of new population
-        new_size = gamma*len(self.population)
+        new_size = self.gamma*len(self.Archive)
         # Inject mutated Archive members into the population
         while len(self.population) < new_size:
             # Select a random solution from the Archive
@@ -270,13 +298,36 @@ class ForestBorg:
             # volunteer.dna = self.mutate(volunteer.dna)
             volunteer = self.mutate_with_feedbackloop(volunteer)
             volunteer.fitness = self.policy_tree_RICE_fitness(volunteer.dna)
+            self.nfe += 1
             # Add new solution to population
-            self.population.append(volunteer)
+            # self.population.append(volunteer)
+            self.add_to_population(volunteer)
             # Update Archive with new solution
             self.add_to_Archive(volunteer)
-
+        print(f'population_size after: {len(self.population)}')
+        print(f'archive_size after: {len(self.Archive)}')
         self.number_of_restarts += 1
         return
+
+    def restart(self, current_Archive, gamma, tau):
+        self.population = []
+        population = current_Archive
+        new_size = gamma*len(current_Archive)
+        # Inject mutated Archive members into the new population
+        while len(population) < new_size:
+            # Select a random solution from the Archive
+            volunteer = self.rng_revive.choice(current_Archive)
+            volunteer = self.mutate_with_feedbackloop(volunteer)
+            volunteer.fitness = self.policy_tree_RICE_fitness(volunteer.dna)
+            self.nfe += 1
+            # Add new solution to population
+            self.population.append(volunteer)
+            # self.add_to_population(volunteer)
+            # Update Archive with new solution
+            self.add_to_Archive(volunteer)
+        # Adjust tournament size to account for the new population size
+        self.tournament_size = max(2, math.floor(tau*new_size))
+        return population
 
     def tournament(self, k):
         # Choose k random members in the population
@@ -289,8 +340,7 @@ class ForestBorg:
                 winners.append(members[idx])
             elif self.dominates(members[idx+1].fitness, members[idx].fitness):
                 winners.append(members[idx+1])
-            # else:
-            #     return members[0] if self.rng_tournament.random() < 0.5 else members[1]
+
         if not winners:
             return self.rng_tournament.choice(members, 1)[0]
         else:
@@ -366,10 +416,7 @@ class ForestBorg:
         return T
 
     def policy_tree_RICE_fitness(self, T):
-        metrics = []
-        fitness = self.model.POT_control(T)
-        for idx, m in enumerate(self.metrics):
-            metrics.append(fitness[idx])
+        metrics = np.array(self.model.POT_control(T))
         return metrics
 
     def crossover(self, P1, P2):
@@ -430,23 +477,40 @@ class ForestBorg:
 
         return lb + x_trial * (ub - lb)
 
-    def natural_selection(self, list_obj):
-        A = np.array(list_obj)
-        N = len(list_obj)
+    def natural_selection(self, A):
+        N = len(A)
         keep = np.ones(N, dtype=bool)
 
         for i in range(N):
             for j in range(i + 1, N):
-                if keep[j] and self.dominates(A[i].fitness, A[j].fitness):
+                if keep[j] and self.dominates(A[i].fitness-self.epsilons, A[j].fitness):
                     keep[j] = False
 
-                elif keep[i] and self.dominates(A[j].fitness, A[i].fitness):
+                elif keep[i] and self.dominates(A[j].fitness-self.epsilons, A[i].fitness):
                     keep[i] = False
 
-                # elif self.same_box(np.array(A[i].fitness), np.array(A[j].fitness)):
-                #     keep[self.rng_natural_selection.choice([i, j])] = False
+                elif self.same_box(A[i].fitness, A[j].fitness):
+                    keep[self.rng_natural_selection.choice([i, j])] = False
 
-        return list(A[keep])
+        return A[keep]
+
+    # def natural_selection_epsilon(self, list_obj):
+    #     A = np.array(list_obj)
+    #     N = len(list_obj)
+    #     keep = np.ones(N, dtype=bool)
+    #
+    #     for i in range(N):
+    #         for j in range(i + 1, N):
+    #             if keep[j] and self.epsilon_dominated(A[i], A[j]):
+    #                 keep[j] = False
+    #
+    #             elif keep[i] and self.epsilon_dominated(A[j], A[i]):
+    #                 keep[i] = False
+    #
+    #             # elif self.same_box(np.array(A[i].fitness), np.array(A[j].fitness)):
+    #             #     keep[self.rng_natural_selection.choice([i, j])] = False
+    #
+    #     return list(A[keep])
 
     def add_to_pareto_front(self):
         for i, member_candidate in enumerate(self.non_dominated):
@@ -467,12 +531,9 @@ class ForestBorg:
         # constraint that every number is positive, just add a large number to every index.
 
         large_number = 1000000000
-
-        a = np.array(a)
         a = a + large_number
-
-        b = np.array(b)
         b = b + large_number
+
         return np.all(a <= b) and np.any(a < b)
 
     def same_box(self, a, b):
@@ -481,31 +542,92 @@ class ForestBorg:
             b = b // self.epsilons
         return np.all(a == b)
 
-    def epsilon_dominated(self, a, b):
-        # Outputs True if a is epsilon non-dominated by b, False otherwise
-        # In this new implementation maximization is assumed -> NEVERMIND
+    # def epsilon_dominated(self, a, b):
+    #     # Outputs True if a is epsilon non-dominated by b, False otherwise
+    #     # In this new implementation maximization is assumed -> NEVERMIND
+    #
+    #     large_number = 1000000000
+    #
+    #     a = np.array(a)
+    #     a = a + large_number
+    #     b = np.array(b)
+    #     b = b + large_number
+    #     # print(f'a: {a} -/- b-epsilons: {b-self.epsilons}')
+    #     # answer = np.all(a <= (b - self.epsilons)) and np.any(a < (b - self.epsilons))
+    #     # print(answer)
+    #     return np.all(a <= (b + self.epsilons)) and np.any(a < (b + self.epsilons))
+    #     # return np.all(a <= b) and np.any(a < b)
 
-        large_number = 1000000000
-
-        a = np.array(a)
-        a = a + large_number
-        b = np.array(b)
-        b = b + large_number
-        # print(f'a: {a} -/- b-epsilons: {b-self.epsilons}')
-        # answer = np.all(a <= (b - self.epsilons)) and np.any(a < (b - self.epsilons))
-        # print(answer)
-        # return np.all(a <= (b - self.epsilons)) and np.any(a < (b - self.epsilons))
-        return np.all(a <= b) and np.any(a < b)
+    def epsilon_dominated(self, organism1, organism2):
+        # Outputs true if organism1 epsilon dominates organism2
+        dominates = False
+        i = 0
+        for a, b in zip(organism1.fitness, organism2.fitness):
+            if a > b + self.epsilons[i]:
+                return False
+            elif a < b - self.epsilons[i]:
+                dominates = True
+            i += 1
+        return dominates
 
     def add_to_Archive(self, candidate_solution):
-        for idx, member in enumerate(self.Archive):
-            if self.epsilon_dominated(candidate_solution.fitness, member.fitness-self.epsilons):
-                self.Archive.pop(idx)
-            elif self.epsilon_dominated(member.fitness, candidate_solution.fitness):
-                return False
-        self.Archive.append(candidate_solution)
-        self.epsilon_progress_counter += 1
-        return True
+        # epsilon_progress = False
+        # for member in self.Archive:
+        #     if self.epsilon_dominated(member, candidate_solution):
+        #         # if the candidate solution is dominated, dont allow it into the Archive
+        #         if self.dominates(member.fitness, candidate_solution.fitness):
+        #             # Check if the member and candidate_solution fall in the same epsilon box, if so, if the member is dominated continue but the epsilon progress stays False
+        #             return
+        #         elif self.dominates(candidate_solution.fitness, member.fitness):
+        #             self.Archive.remove(member)
+        #             self.Archive.append(candidate_solution)
+        #         # else:
+        #             # print(f'candidate_solution: {candidate_solution.fitness}')
+        #             # print(f'member: {member.fitness}')
+        #     elif self.epsilon_dominated(candidate_solution, member):
+        #         # If a member is dominated by the candidate solution, remove the member from the Archive
+        #         self.Archive.remove(member)
+        #         # print(f'candidate_solution: {candidate_solution.fitness}')
+        #         # print(f'member: {member.fitness}')
+        #         epsilon_progress = True
+        # self.Archive.append(candidate_solution)
+        # if epsilon_progress:
+        #     self.epsilon_progress_counter += 1
+        # return
+
+        epsilon_progress = False
+        for member in self.Archive:
+            if self.dominates(candidate_solution.fitness, member.fitness - self.epsilons):
+                # self.Archive.remove(member)
+                self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                epsilon_progress = True
+            elif self.dominates(member.fitness - self.epsilons, candidate_solution.fitness):
+                # Check if they fall in the same box, if so, keep purely dominant solution
+                if self.dominates(candidate_solution.fitness, member.fitness):
+                    # self.Archive.remove(member)
+                    self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                elif self.dominates(member.fitness, candidate_solution.fitness):
+                    return
+                return
+        self.Archive = np.append(self.Archive, candidate_solution)
+        if epsilon_progress:
+            self.epsilon_progress_counter += 1
+        return
+
+    # def add_to_Archive(self, candidate_solution):
+    #     epsilon_progress = True
+    #     for idx, member in enumerate(self.Archive):
+    #         if self.epsilon_dominated(candidate_solution.fitness, member.fitness):
+    #             self.Archive.pop(idx)
+    #         elif self.epsilon_dominated(member.fitness, candidate_solution.fitness):
+    #             if self.dominates(member.fitness, candidate_solution.fitness):
+    #                 return False
+    #             else:
+    #                 epsilon_progress = False
+    #     self.Archive.append(candidate_solution)
+    #     if epsilon_progress:
+    #         self.epsilon_progress_counter += 1
+    #     return True
 
     def add_to_population(self, offspring):
         # If the offspring dominates one or more population members, the offspring replaces
@@ -525,128 +647,17 @@ class ForestBorg:
                 return
 
         if members_to_be_randomly_rejected:
-            self.population.pop(self.rng_population.choice(members_to_be_randomly_rejected))
-            self.population.append(offspring)
+            # self.population.pop(self.rng_population.choice(members_to_be_randomly_rejected))
+            # self.population.append(offspring)
+            self.population = self.population[~np.isin(self.population, self.rng_population.choice(members_to_be_randomly_rejected))]
+            self.population = np.append(self.population, offspring)
         else:
             kick_out = self.rng_population.choice(len(self.population))
-            self.population.pop(kick_out)
-            self.population.append(offspring)
+            # self.population.pop(kick_out)
+            # self.population.append(offspring)
+            self.population = self.population[~np.isin(self.population, kick_out)]
+            self.population = np.append(self.population, offspring)
         pass
-
-    # def crossover_subtree(self, P1, P2):
-    #     P1, P2 = [copy.deepcopy(P) for P in (P1, P2)]
-    #     # should use indices of ONLY feature nodes
-    #     feature_ix1 = [i for i in range(P1.N) if P1.L[i].is_feature]
-    #     feature_ix2 = [i for i in range(P2.N) if P2.L[i].is_feature]
-    #     index1 = self.rng_crossover_subtree.choice(feature_ix1)
-    #     index2 = self.rng_crossover_subtree.choice(feature_ix2)
-    #     slice1 = P1.get_subtree(index1)
-    #     slice2 = P2.get_subtree(index2)
-    #     P1.L[slice1], P2.L[slice2] = P2.L[slice2], P1.L[slice1]
-    #     P1.build()
-    #     P2.build()
-    #     return (P1, P2)
-    #
-    # # def crossover_homologous(self, P1, P2):
-    # #
-    # #     return P1, P2
-    #
-    # def choose_mutation_operator(self, operators, zeta=1):
-    #     # Initially give every operator an equal chance, then feedback loop based on occuranc ein self.Archive
-    #     operator_dict = {}
-    #     for operator in operators:
-    #         num_solutions_operator = 0
-    #         for member in self.Archive:
-    #             if member.operator == operator:
-    #                 num_solutions_operator += 1
-    #         operator_dict[operator] = num_solutions_operator+zeta
-    #
-    #     probability_dict = {}
-    #     for operator in operator_dict.keys():
-    #         #     resultset = np.array([value for key, value in operator_dict.items() if key not in operator]).sum()
-    #         resultset = np.array([value for key, value in operator_dict.items()]).sum()
-    #         probability = operator_dict[operator] / (resultset)
-    #         probability_dict[operator] = probability
-    #
-    #     return self.rng_choose_operator.choice(list(probability_dict.keys()), p=list(probability_dict.values()))
-    #
-    # def mutation_subtree(self, T):
-    #     T = copy.deepcopy(T)
-    #     # should use indices of ONLY feature nodes
-    #     feature_ix = [i for i in range(T.N) if T.L[i].is_feature]
-    #     index = self.rng_mutation_subtree.choice(feature_ix)
-    #     slice = T.get_subtree(index)
-    #     for node in T.L[slice]:
-    #         if node.is_feature:  # if isinstance(node, Feature):
-    #             low, high = self.feature_bounds[node.index]
-    #             if node.is_discrete:
-    #                 node.threshold = self.rng_mutation_subtree.integers(low, high + 1)
-    #             else:
-    #                 node.threshold = self.bounded_gaussian(
-    #                     node.threshold, [low, high])
-    #         else:
-    #             if self.discrete_actions:
-    #                 node.value = str(self.rng_mutation_subtree.choice(self.action_names))
-    #             else:
-    #                 # print(item)
-    #                 # print(self.action_bounds)
-    #                 # print(item.value)
-    #                 # item.value = self.bounded_gaussian(
-    #                 #     item.value, self.action_bounds)
-    #
-    #                 # --------
-    #                 # a = np.random.choice(len(self.action_names))  # SD changed
-    #                 # action_name = self.action_names[a]
-    #                 # action_value = np.random.uniform(*self.action_bounds[a])
-    #                 # action_input = f'{action_name}_{action_value}'
-    #                 # # print(action_input)
-    #                 # item.value = action_input
-    #
-    #                 # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
-    #                 action_input = f'miu_{self.rng_mutation_subtree.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)}'
-    #                 node.value = action_input
-    #     return T
-    #
-    # def mutation_point(self, T):
-    #     # Point mutation at either feature or action node
-    #     T = copy.deepcopy(T)
-    #     item = self.rng_mutation_point.choice(T.L)
-    #     if item.is_feature:
-    #         low, high = self.feature_bounds[item.index]
-    #         if item.is_discrete:
-    #             item.threshold = self.rng_mutate.integers(low, high + 1)
-    #         else:
-    #             item.threshold = self.bounded_gaussian(
-    #                 item.threshold, [low, high])
-    #     if self.discrete_actions:
-    #         item.value = str(self.rng_mutate.choice(self.action_names))
-    #     else:
-    #         # print(item)
-    #         # print(self.action_bounds)
-    #         # print(item.value)
-    #         # item.value = self.bounded_gaussian(
-    #         #     item.value, self.action_bounds)
-    #
-    #         # --------
-    #         # a = np.random.choice(len(self.action_names))  # SD changed
-    #         # action_name = self.action_names[a]
-    #         # action_value = np.random.uniform(*self.action_bounds[a])
-    #         # action_input = f'{action_name}_{action_value}'
-    #         # # print(action_input)
-    #         # item.value = action_input
-    #
-    #         # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
-    #         action_input = f'miu_{self.rng_mutate.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutate.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_mutate.uniform(*self.action_bounds[2]), 3)}'
-    #         item.value = action_input
-    #     return T
-
-    # def mutation_shrink(self, T):
-    #
-    #     return T
-    #
-    # def mutation_expansion(self, T):
-    #
-    #     return T
 
 
 class GAOperators(ForestBorg):
@@ -1104,8 +1115,8 @@ if __name__ == '__main__':
                   discrete_features=False,
                   # Optimization variables
                   mutation_prob=0.5,
-                  max_nfe=5000,
+                  max_nfe=20000,
                   epsilons=np.array([0.05, 0.05, 0.05]),
                   gamma=4,
                   tau=0.02,
-                  ).iterate()
+                  )
