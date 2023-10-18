@@ -5,6 +5,8 @@ from POT.ptreeopt import PTreeOpt
 import logging
 # Import the policy tree optimizer with borg
 from POT.borg_optimization import PolicyTreeOptimizer
+# Import the control - random search - 'optimizer'
+from POT.control_optimization import PolicyTreeOptimizerControl
 # Import the ema workbench by professor Kwakkel
 from ema_workbench import RealParameter, ScalarOutcome, Constant, Model, IntegerParameter
 from ema_workbench import SequentialEvaluator, ema_logging
@@ -12,6 +14,7 @@ from ema_workbench import save_results
 # Import the homemade POT optimizer
 from POT.homemade_optimization import Cluster
 from POT.optimization_tryout import Cluster_
+from POT.forest_borg import ForestBorg
 
 import pandas as pd
 import numpy as np
@@ -426,7 +429,7 @@ if __name__ == '__main__':
 
         # np.random.seed(1)
 
-        title_of_run = ''
+        title_of_run = 'Control_500000nfe_depth_4__mat_netoutput_year_periodutility_damages_tmpovershoots'
         start = time.time()
         # Model variables
 
@@ -440,22 +443,23 @@ if __name__ == '__main__':
         # database_POT = 'C:/Users/Stijn Daemen/Documents/master thesis TU Delft/code/IAM_RICE2/jupyter notebooks/Tests_Borg.db'
         # table_name_POT = 'Test3_couplingborg_not_edited_borg'
 
-        df_optimized_metrics = PolicyTreeOptimizer(model=RICE(years_10, regions, save_location=save_location, file_name=title_of_run),
-                            # model=RICE(years_10, regions, database_POT=database_POT, table_name_POT=table_name_POT),
-                            action_names=action_names,
-                            action_bounds=action_bounds,
-                            discrete_actions=False,
-                            feature_names=feature_names,
-                            feature_bounds=feature_bounds,
-                            discrete_features=False,
-                            epsilon=0.01,
-                            max_nfe=100000,
-                            max_depth=4,
-                            population_size=100
-                            ).run()
+        df_optimized_metrics = PolicyTreeOptimizerControl(
+            model=RICE(years_10, regions, save_location=save_location, file_name=title_of_run),
+            # model=RICE(years_10, regions, database_POT=database_POT, table_name_POT=table_name_POT),
+            action_names=action_names,
+            action_bounds=action_bounds,
+            discrete_actions=False,
+            feature_names=feature_names,
+            feature_bounds=feature_bounds,
+            discrete_features=False,
+            epsilon=0.05,
+            max_nfe=500000,
+            max_depth=4,
+            population_size=100
+        ).run()
         df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
         end = time.time()
-        return print(f'Total elapsed time: {(end - start)/60} minutes.')
+        return print(f'Total elapsed time: {(end - start) / 60} minutes.')
 
     def optimization_RICE_POT_Homemade_advanced(years_10, regions, save_location):
         master_rng = np.random.default_rng(42)  # Master RNG
@@ -550,6 +554,36 @@ if __name__ == '__main__':
         print(f'Elapsed time: {(end - start) / 60} minutes.')
         return
 
+    def optimization_RICE_POT_ForestBorg(years_10, regions, save_location):
+        title_of_run = 'ForestBORG_500000nfe_tree_depth_4_population_100_mat_net_output_year_continuous_period_utility_damages_tempovershoots'
+        # title_of_run = 'TESTforestborg'
+        start = time.time()
+
+        master_rng = np.random.default_rng(42)  # Master RNG
+        df_optimized_metrics = ForestBorg(pop_size=100, master_rng=master_rng,
+                                          years_10=years_10,
+                                          regions=regions,
+                                          metrics=['period_utility', 'damages', 'temp_overshoots'],
+                                          # Tree variables
+                                          action_names=['miu', 'sr', 'irstp'],
+                                          action_bounds=[[2100, 2250], [0.2, 0.5], [0.01, 0.1]],
+                                          feature_names=['mat', 'net_output', 'year'],
+                                          feature_bounds=[[780, 1300], [55, 2300], [2005, 2305]],
+                                          max_depth=4,
+                                          discrete_actions=False,
+                                          discrete_features=False,
+                                          # Optimization variables
+                                          mutation_prob=0.5,
+                                          max_nfe=500000,
+                                          epsilons=np.array([0.05, 0.05, 0.05]),
+                                          gamma=4,
+                                          tau=0.02,
+                                          save_location=save_location,
+                                          title_of_run=title_of_run,
+                                          ).run()
+        df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
+        end = time.time()
+        return print(f'Total elapsed time: {(end - start) / 60} minutes.')
     # basic_run_RICE(years_10, regions, save_location)
 
     # optimization_RICE_POT_Borg(years_10, regions, save_location)
@@ -558,5 +592,7 @@ if __name__ == '__main__':
 
     # basic_run_RICE(years_10, regions, save_location)
 
-    connect_to_EMA(years_10, regions, save_location)
+    # connect_to_EMA(years_10, regions, save_location)
+
+    optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
 

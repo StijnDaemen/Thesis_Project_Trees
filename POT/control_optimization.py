@@ -20,10 +20,9 @@ class PolicyTreeOptimizerControl:
         # self.epsilon = epsilon
         self.max_nfe = max_nfe
         # self.population_size = population_size
+        self.pareto_front = np.array([self.spawn()])
 
     def random_tree(self, terminal_ratio=0.5,
-                    # discrete_actions=True,
-                    # discrete_features=None,
                     ):
         num_features = len(self.feature_names)
         num_actions = len(self.action_names)  # SD changed
@@ -59,25 +58,15 @@ class PolicyTreeOptimizerControl:
         T.prune()
         return T
 
-    def RICE_evaluation(self):
-        T = self.random_tree()
-        m1, m2, m3 = self.model.POT_control_Herman(T)
-        # print(m1, m2, m3, T)
-        sol_dict = {T: [m1, m2, m3]}
-        return sol_dict
+    def spawn(self):
+        organism = Organism()
+        organism.dna = self.random_tree()
+        organism.fitness = self.policy_tree_RICE_fitness(organism.dna)
+        return organism
 
-    def add_to_pareto_front(self, candidate, tree):
-        for i, member_candidate in enumerate(candidate):
-            for j, member_established in enumerate(self.pareto_front):
-                if self.dominates(member_candidate.fitness, member_established.fitness):
-                    self.pareto_front.pop(j)
-                    self.pareto_front.append(member_candidate)
-                    self.pareto_front_trees.pop(j)
-                    self.pareto_front_trees.append(tree)
-
-        # Remove duplicates from pareto_front if present:
-        self.pareto_front = list(set(self.pareto_front))
-        return
+    def policy_tree_RICE_fitness(self, T):
+        metrics = np.array(self.model.POT_control_Herman(T))
+        return metrics
 
     def dominates(self, a, b):
         # assumes minimization
@@ -85,30 +74,40 @@ class PolicyTreeOptimizerControl:
         # Note SD: somehow the logic with np.all() breaks down if there are positive and negative numbers in the array
         # So to circumvent this but still allow multiobjective optimisation in different directions under the
         # constraint that every number is positive, just add a large number to every index.
+
         large_number = 1000000000
-
-        a = np.array(a)
         a = a + large_number
-
-        b = np.array(b)
         b = b + large_number
-        # print(f'a: {a}')
-        # print(f'b: {b}')
+
         return np.all(a <= b) and np.any(a < b)
+
+    def selection(self, candidate):
+        for member in self.pareto_front:
+            if self.dominates(candidate.fitness, member.fitness):
+                # Remove member from pareto front
+                self.pareto_front = self.pareto_front[~np.isin(self.pareto_front, member)]
+            elif self.dominates(member.fitness, candidate.fitness):
+                return
+        self.pareto_front = np.append(self.pareto_front, candidate)
+        return
 
     def run(self):
         nfe = 0
-        while nfe <= self.max_nfe:
-            evaluation = self.RICE_evaluation()
-            solution = evaluation.values()
-            tree = evaluation.keys()
-            if nfe == 0:
-                self.pareto_front = solution
-            else:
-                self.add_to_pareto_front(solution, tree)
+        while nfe < self.max_nfe:
+            organism = self.spawn()
+            self.selection(organism)
+            if nfe%1000 == 0:
+                print(f'nfe: {nfe}')
             nfe += 1
-
-        df = pd.DataFrame(self.pareto_front, index=self.pareto_front_trees,
-                          columns=['pareto_front'])
-        # df.to_excel('control_run_pareto_front.xlsx')
+        pf_dict = {}
+        for member in self.pareto_front:
+            pf_dict[member.dna] = [member.fitness[0], member.fitness[1], member.fitness[2]]
+        df = pd.DataFrame.from_dict(pf_dict, orient='index')
         return df
+
+
+class Organism:
+    def __init__(self):
+        self.dna = None
+        self.fitness = None
+        self.operator = None
