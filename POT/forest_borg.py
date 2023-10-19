@@ -73,7 +73,7 @@ class ForestBorg:
         self.tournament_size = 2
 
         self.epsilon_progress_counter = 0
-        self.epsilon_progress_tracker = np.zeros(self.max_nfe)
+        self.epsilon_progress_tracker = np.array([])
 
         self.number_of_restarts = 0
 
@@ -261,12 +261,12 @@ class ForestBorg:
         new_size = gamma * len(current_Archive)
         # Inject mutated Archive members into the new population
         while len(self.population) < new_size:
-            # # Select a random solution from the Archive
-            # volunteer = self.rng_revive.choice(current_Archive)
-            # volunteer = self.mutate_with_feedbackloop(volunteer)
-            # volunteer.fitness = self.policy_tree_RICE_fitness(volunteer.dna)
-            # Now try with completely new solutions as that seemed kind of promising in trials
-            volunteer = self.spawn()
+            # Select a random solution from the Archive
+            volunteer = self.rng_revive.choice(current_Archive)
+            volunteer = self.mutate_with_feedbackloop(volunteer)
+            volunteer.fitness = self.policy_tree_RICE_fitness(volunteer.dna)
+            # # Now try with completely new solutions as that seemed kind of promising in trials
+            # volunteer = self.spawn()
             self.nfe += 1
             # Add new solution to population
             if self.population.size > 0:
@@ -477,7 +477,7 @@ class ForestBorg:
             # self.population.append(offspring)
             self.population = self.population[~np.isin(self.population, kick_out)]
             self.population = np.append(self.population, offspring)
-        pass
+        return
 
 
 class GAOperators(ForestBorg):
