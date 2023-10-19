@@ -15,6 +15,7 @@ from ema_workbench import save_results
 from POT.homemade_optimization import Cluster
 from POT.optimization_tryout import Cluster_
 from POT.forest_borg import ForestBorg
+from POT.forest_borg_Folsom import ForestBorgFolsom
 
 from folsom import Folsom
 from ptreeopt import PTreeOpt
@@ -290,7 +291,7 @@ if __name__ == '__main__':
     # POLICY TREE OPTIMIZATION WITH FOLSOM -------------
 
     def optimization_Folsom_Herman(save_location):
-        title_of_run = 'TEST_Folsom_Herman_25000nfe'
+        title_of_run = 'TEST_Folsom_Herman_5000nfe'
         np.random.seed(42)
 
         model = Folsom('folsom/data/folsom-daily-w2016.csv',
@@ -314,7 +315,7 @@ if __name__ == '__main__':
                             format='[%(processName)s/%(levelname)s:%(filename)s:%(funcName)s] %(message)s')
 
         # With only 1000 function evaluations this will not be very good
-        best_solution, best_score, snapshots = algorithm.run(max_nfe=25000,
+        best_solution, best_score, snapshots = algorithm.run(max_nfe=5000,
                                                              log_frequency=100,
                                                              snapshot_frequency=100)
 
@@ -322,6 +323,50 @@ if __name__ == '__main__':
         pickle.dump(best_solution, open(f'{save_location}/{title_of_run}_best_solution.pkl', 'wb'))
         pickle.dump(best_score, open(f'{save_location}/{title_of_run}_best_score.pkl', 'wb'))
         return
+
+    def optimization_Folsom_ForestBorg(save_location):
+        title_of_run = 'TEST_Folsom_ForestBorg_5000nfe'
+        start = time.time()
+
+        master_rng = np.random.default_rng(42)  # Master RNG
+        df_optimized_metrics = ForestBorgFolsom(pop_size=100, master_rng=master_rng,
+                                          years_10=years_10,
+                                          regions=regions,
+                                          metrics=['period_utility', 'damages', 'temp_overshoots'],
+                                          # Tree variables
+                                          action_names=['Release_Demand', 'Hedge_90', 'Hedge_80',
+                                                        'Hedge_70', 'Hedge_60', 'Hedge_50', 'Flood_Control'],
+                                          action_bounds=None,
+                                          feature_bounds=[[0, 1000], [1, 365], [0, 300]],
+                                          feature_names=['Storage', 'Day', 'Inflow'],
+                                          max_depth=5,
+                                          discrete_actions=True,
+                                          discrete_features=None,
+                                          # Optimization variables
+                                          mutation_prob=0.5,
+                                          max_nfe=5000,
+                                          epsilons=[0.01, 1000, 0.01, 10],
+                                          gamma=4,
+                                          tau=0.02,
+                                          save_location=save_location,
+                                          title_of_run=title_of_run,
+                                          ).run()
+        df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
+        end = time.time()
+        return print(f'Total elapsed time: {(end - start) / 60} minutes.')
+
+        # logging.basicConfig(level=logging.INFO,
+        #                     format='[%(processName)s/%(levelname)s:%(filename)s:%(funcName)s] %(message)s')
+        #
+        # # With only 1000 function evaluations this will not be very good
+        # best_solution, best_score, snapshots = algorithm.run(max_nfe=5000,
+        #                                                      log_frequency=100,
+        #                                                      snapshot_frequency=100)
+        #
+        # pickle.dump(snapshots, open(f'{save_location}/{title_of_run}_snapshots.pkl', 'wb'))
+        # pickle.dump(best_solution, open(f'{save_location}/{title_of_run}_best_solution.pkl', 'wb'))
+        # pickle.dump(best_score, open(f'{save_location}/{title_of_run}_best_score.pkl', 'wb'))
+        # return
 
     # POLICY TREE OPTIMIZATION WITH RICE ---------------
     def optimization_RICE_POT_Herman(years_10, regions, save_location):
@@ -637,5 +682,14 @@ if __name__ == '__main__':
 
     # optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
 
-    optimization_Folsom_Herman(save_location)
+    # optimization_Folsom_Herman(save_location)
+
+    optimization_Folsom_ForestBorg(save_location)
+
+    # file_path = 'output_data/TEST_Folsom_Herman_5000nfe_snapshots.pkl'
+    #
+    # with open(file_path, "rb") as file:
+    #     snapshots = pickle.load(file)
+    #
+    # print(snapshots)
 
