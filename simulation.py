@@ -325,11 +325,11 @@ if __name__ == '__main__':
         return
 
     def optimization_Folsom_ForestBorg(save_location):
-        title_of_run = 'TEST_Folsom_ForestBorg_5000nfe'
+        title_of_run = 'TEST_Folsom_ForestBorg_1000nfe'
         start = time.time()
 
         master_rng = np.random.default_rng(42)  # Master RNG
-        df_optimized_metrics = ForestBorgFolsom(pop_size=100, master_rng=master_rng,
+        df_optimized_metrics, snapshots = ForestBorgFolsom(pop_size=100, master_rng=master_rng,
                                           years_10=years_10,
                                           regions=regions,
                                           metrics=['period_utility', 'damages', 'temp_overshoots'],
@@ -344,7 +344,7 @@ if __name__ == '__main__':
                                           discrete_features=None,
                                           # Optimization variables
                                           mutation_prob=0.5,
-                                          max_nfe=5000,
+                                          max_nfe=1000,
                                           epsilons=[0.01, 1000, 0.01, 10],
                                           gamma=4,
                                           tau=0.02,
@@ -352,6 +352,7 @@ if __name__ == '__main__':
                                           title_of_run=title_of_run,
                                           ).run()
         df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
+        pickle.dump(snapshots, open(f'{save_location}/{title_of_run}_snapshots.pkl', 'wb'))
         end = time.time()
         return print(f'Total elapsed time: {(end - start) / 60} minutes.')
 

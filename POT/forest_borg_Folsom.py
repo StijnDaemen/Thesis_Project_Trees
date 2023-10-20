@@ -78,6 +78,10 @@ class ForestBorgFolsom:
 
         self.epsilon_progress_counter = 0
         self.epsilon_progress_tracker = np.array([])
+        self.snapshot_dict = {'nfe': [],
+                              'time': [],
+                              'Archive_solutions': [],
+                              'Archive_trees': []}
 
         self.number_of_restarts = 0
 
@@ -121,19 +125,23 @@ class ForestBorgFolsom:
             nfe += 1
             log_counter += 1
             if log_counter % 50 == 0:
-                # Archive snapshots
-                data_dict = {}
-                for idx, item in enumerate(self.Archive):
-                    data_dict[f'{self.nfe}_{idx}_snapshot'] = [item.fitness[0], item.fitness[1], item.fitness[2], item.fitness[3],
-                                                             str(item.dna)]
-                df = pd.DataFrame.from_dict(data_dict, orient='index')
-
-                pickle.dump(self.Archive, open(f'{self.save_location}/{self.file_name}_Archive_snapshots.pkl', 'wb'))
-
-                conn = sqlite3.connect(self.database)
-                df.to_sql(name=f'archive_snapshots_{self.file_name}', con=conn, if_exists='append')
-                conn.commit()
-                conn.close()
+                # # Archive snapshots
+                # data_dict = {}
+                # for idx, item in enumerate(self.Archive):
+                #     data_dict[f'{self.nfe}_{idx}_snapshot'] = [item.fitness[0], item.fitness[1], item.fitness[2], item.fitness[3],
+                #                                              str(item.dna)]
+                # df = pd.DataFrame.from_dict(data_dict, orient='index')
+                #
+                # pickle.dump(self.Archive, open(f'{self.save_location}/{self.file_name}_Archive_snapshots.pkl', 'wb'))
+                #
+                # conn = sqlite3.connect(self.database)
+                # df.to_sql(name=f'archive_snapshots_{self.file_name}', con=conn, if_exists='append')
+                # conn.commit()
+                # conn.close()
+                self.snapshot_dict['nfe'].append(self.nfe)
+                self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
+                self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
+                self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
 
             if log_counter % 50 == 0:
                 intermediate_time = time.time()
@@ -153,9 +161,9 @@ class ForestBorgFolsom:
         print(
             f'Total elapsed time: {(self.end_time - self.start_time) / 60} min -- {len(self.Archive)} non-dominated solutions were found.')
 
-        # MOEAVisualizations(self.save_location).visualize_generational_series(self.epsilon_progress_tracker,
-        #                                                  title=f'epsilon_progress_{self.file_name}',
-        #                                                  x_label='generation', y_label='epsilon-progress', save=True)
+        MOEAVisualizations(self.save_location).visualize_generational_series(self.epsilon_progress_tracker,
+                                                         title=f'epsilon_progress_{self.file_name}',
+                                                         x_label='generation', y_label='epsilon-progress', save=True)
         #
         # Archive_in_objective_space = []
         # for member in self.Archive:
@@ -170,7 +178,7 @@ class ForestBorgFolsom:
         MOEAVisualizations(self.save_location).visualize_operator_distribution(self.GAOperators,
                                                            title=f'operator_distribution_{self.file_name}',
                                                            x_label='Generation', y_label='Count', save=True)
-        return df
+        return df, self.snapshot_dict
 
     def iterate(self, i):
         if i%100 == 0:
