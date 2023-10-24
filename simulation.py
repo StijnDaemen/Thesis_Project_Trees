@@ -642,8 +642,8 @@ if __name__ == '__main__':
         return
 
     def optimization_RICE_POT_ForestBorg(years_10, regions, save_location):
-        title_of_run = 'ForestBORG_500000nfe_tree_depth_4_population_100_mat_net_output_year_continuous_period_utility_damages_tempovershoots'
-        # title_of_run = 'TESTforestborg'
+        # title_of_run = 'ForestBORG_500000nfe_tree_depth_4_population_100_mat_net_output_year_continuous_period_utility_damages_tempovershoots'
+        title_of_run = 'TESTforestborg'
         start = time.time()
 
         master_rng = np.random.default_rng(42)  # Master RNG
@@ -681,11 +681,11 @@ if __name__ == '__main__':
 
     # connect_to_EMA(years_10, regions, save_location)
 
-    # optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
+    optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
 
     # optimization_Folsom_Herman(save_location)
 
-    optimization_Folsom_ForestBorg(save_location)
+    # optimization_Folsom_ForestBorg(save_location)
 
     # file_path = 'output_data/TEST_Folsom_Herman_5000nfe_snapshots.pkl'
     #

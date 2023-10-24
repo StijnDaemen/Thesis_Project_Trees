@@ -74,6 +74,10 @@ class ForestBorg:
 
         self.epsilon_progress_counter = 0
         self.epsilon_progress_tracker = np.array([])
+        self.snapshot_dict = {'nfe': [],
+                              'time': [],
+                              'Archive_solutions': [],
+                              'Archive_trees': []}
 
         self.number_of_restarts = 0
 
@@ -98,7 +102,7 @@ class ForestBorg:
         else:
             self.database = None
 
-    def run(self):
+    def run(self, snapshot_frequency=100):
         self.population = np.array([self.spawn() for _ in range(self.pop_size)])
         print(f'size pop: {np.size(self.population)}')
 
@@ -110,30 +114,44 @@ class ForestBorg:
 
         # -- main loop -----------------------------------------
 
-        nfe = 0
-        log_counter = 0
+        last_snapshot = 0
+        main_loop_counter = 0
+        # log_counter = 0
         while self.nfe < self.max_nfe:
-            self.iterate(nfe)
-            nfe += 1
-            log_counter += 1
-            if log_counter % 100 == 0:
-                # Archive snapshots
-                data_dict = {}
-                for idx, item in enumerate(self.Archive):
-                    data_dict[f'{self.nfe}_{idx}_snapshot'] = [item.fitness[0], item.fitness[1], item.fitness[2],
-                                                             str(item.dna)]
-                df = pd.DataFrame.from_dict(data_dict, orient='index')
+            self.iterate(main_loop_counter)
+            main_loop_counter += 1
+            # log_counter += 1
 
-                conn = sqlite3.connect(self.database)
-                df.to_sql(name=f'archive_snapshots_{self.file_name}', con=conn, if_exists='append')
-                conn.commit()
-                conn.close()
+            if self.nfe >= last_snapshot + snapshot_frequency:
+                last_snapshot = self.nfe
+                self.snapshot_dict['nfe'].append(self.nfe)
+                self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
+                self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
+                self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
 
-            if log_counter % 50 == 0:
                 intermediate_time = time.time()
                 print(
                     f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
                     end='', flush=True)
+
+            # if log_counter % 100 == 0:
+            #     # Archive snapshots
+            #     data_dict = {}
+            #     for idx, item in enumerate(self.Archive):
+            #         data_dict[f'{self.nfe}_{idx}_snapshot'] = [item.fitness[0], item.fitness[1], item.fitness[2],
+            #                                                  str(item.dna)]
+            #     df = pd.DataFrame.from_dict(data_dict, orient='index')
+            #
+            #     conn = sqlite3.connect(self.database)
+            #     df.to_sql(name=f'archive_snapshots_{self.file_name}', con=conn, if_exists='append')
+            #     conn.commit()
+            #     conn.close()
+            #
+            # if log_counter % 50 == 0:
+            #     intermediate_time = time.time()
+            #     print(
+            #         f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
+            #         end='', flush=True)
 
         # -- Create visualizations of the run -------------------
         self.end_time = time.time()
@@ -167,7 +185,7 @@ class ForestBorg:
         return df
 
     def iterate(self, i):
-        if i%100 == 0:
+        if i%500 == 0:
             # Check gamma (the population to Archive ratio)
             gamma = len(self.population) / len(self.Archive)
 
