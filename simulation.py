@@ -1,24 +1,23 @@
 # Import the generative model by SD
 from RICE_model.IAM_RICE import RICE
 # Import the policy tree optimizer by Herman
-from POT.ptreeopt import PTreeOpt
-import logging
 # Import the policy tree optimizer with borg
-from POT.borg_optimization import PolicyTreeOptimizer
+# from POT.borg_optimization import PolicyTreeOptimizer
 # Import the control - random search - 'optimizer'
 from POT.control_optimization import PolicyTreeOptimizerControl
 # Import the ema workbench by professor Kwakkel
 from ema_workbench import RealParameter, ScalarOutcome, Constant, Model, IntegerParameter
-from ema_workbench import SequentialEvaluator, ema_logging
-from ema_workbench import save_results
+from ema_workbench import SequentialEvaluator
 # Import the homemade POT optimizer
 from POT.homemade_optimization import Cluster
 from POT.optimization_tryout import Cluster_
 from POT.forest_borg import ForestBorg
 from POT.forest_borg_Folsom import ForestBorgFolsom
+from POT.shotgun_optimization import Shotgun
 
 from folsom import Folsom
-from ptreeopt import PTreeOpt
+# from POT.ptreeopt import PTreeOpt
+from ptreeopt.opt import PTreeOpt
 import logging
 import pickle
 
@@ -27,7 +26,7 @@ import numpy as np
 import sqlite3
 import time
 import os
-from ema_workbench import load_results, ema_logging
+from ema_workbench import ema_logging
 package_directory = os.path.dirname(os.path.abspath(__file__))
 path_to_dir = os.path.join(package_directory)
 
@@ -255,7 +254,6 @@ if __name__ == '__main__':
 
         from ema_workbench.em_framework.optimization import EpsilonProgress
         # from ema_workbench import MultiprocessingEvaluator
-        import matplotlib.pyplot as plt
 
         convergence_metrics = [
             EpsilonProgress()
@@ -325,7 +323,7 @@ if __name__ == '__main__':
         return
 
     def optimization_Folsom_ForestBorg(save_location):
-        title_of_run = 'TEST_Folsom_ForestBorg_1000nfe'
+        title_of_run = 'TEST_Folsom_ForestBorg_25000nfe'
         start = time.time()
 
         master_rng = np.random.default_rng(42)  # Master RNG
@@ -344,7 +342,7 @@ if __name__ == '__main__':
                                           discrete_features=None,
                                           # Optimization variables
                                           mutation_prob=0.5,
-                                          max_nfe=1000,
+                                          max_nfe=25000,
                                           epsilons=[0.01, 1000, 0.01, 10],
                                           gamma=4,
                                           tau=0.02,
@@ -368,6 +366,35 @@ if __name__ == '__main__':
         # pickle.dump(best_solution, open(f'{save_location}/{title_of_run}_best_solution.pkl', 'wb'))
         # pickle.dump(best_score, open(f'{save_location}/{title_of_run}_best_score.pkl', 'wb'))
         # return
+
+    def optimization_Folsom_Shotgun(save_location):
+        title_of_run = 'TEST_Folsom_Shotgun'
+        start = time.time()
+
+        master_rng = np.random.default_rng(42)  # Master RNG
+        model = Folsom('folsom/data/folsom-daily-w2016.csv',
+                       sd='1995-10-01', ed='2016-09-30', use_tocs=False, multiobj=True)
+        snapshots = Shotgun(model=model,
+                master_rng=master_rng,
+                metrics=['period_utility', 'damages', 'temp_overshoots'],
+                # Tree variables
+                action_names=['miu', 'sr', 'irstp'],
+                action_bounds=[[2100, 2250], [0.2, 0.5], [0.01, 0.1]],
+                feature_names=['mat', 'net_output', 'year'],
+                feature_bounds=[[780, 1300], [55, 2300], [2005, 2305]],
+                max_depth=4,
+                discrete_actions=False,
+                discrete_features=False,
+                # Optimization variables
+                mutation_prob=0.5,
+                pop_size=100,
+                max_nfe=2000,
+                epsilons=np.array([0.05, 0.05, 0.05]),
+                ).run()
+        # df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
+        pickle.dump(snapshots, open(f'{save_location}/{title_of_run}_snapshots.pkl', 'wb'))
+        end = time.time()
+        return print(f'Total elapsed time: {(end - start) / 60} minutes.')
 
     # POLICY TREE OPTIMIZATION WITH RICE ---------------
     def optimization_RICE_POT_Herman(years_10, regions, save_location):
@@ -422,52 +449,52 @@ if __name__ == '__main__':
         end = time.time()
         return print(f'Total elapsed time: {(end - start)/60} minutes.')
 
-    def optimization_RICE_POT_Borg(years_10, regions, save_location):
-        # from POT.optimization import PolicyTreeOptimizer
-        #
-        # model = RICE(years_10, regions)
-        # feature_bounds = [[780, 1300], [55, 2300], [2005, 2305]]
-        # feature_names = ['mat', 'net_output', 'year']
-        # action_names = ['miu_2100', 'miu_2150', 'miu_2200', 'miu_2125', 'sr_02', 'sr_03', 'sr_04', 'sr_05']
-        # PolicyTreeOptimizer(model.POT_control, feature_bounds=feature_bounds,
-        #                     feature_names=feature_names,
-        #                     action_names=action_names,
-        #                     discrete_actions=True,
-        #                     population_size=4,
-        #                     mu=2).run(max_nfe=4)
-
-        # np.random.seed(1)
-
-        title_of_run = ''
-        start = time.time()
-        # Model variables
-
-        # Tree variables
-        # action_names = ['miu_2100', 'miu_2150', 'miu_2200', 'miu_2125', 'sr_02', 'sr_03', 'sr_04', 'sr_05']
-        action_names = ['miu', 'sr', 'irstp']
-        action_bounds = [[2065, 2305], [0.1, 0.5], [0.001, 0.1]]
-        feature_names = ['mat', 'net_output', 'year']
-        feature_bounds = [[780, 1300], [55, 2300], [2005, 2305]]
-        # Save variables
-        # database_POT = 'C:/Users/Stijn Daemen/Documents/master thesis TU Delft/code/IAM_RICE2/jupyter notebooks/Tests_Borg.db'
-        # table_name_POT = 'Test3_couplingborg_not_edited_borg'
-
-        df_optimized_metrics = PolicyTreeOptimizer(model=RICE(years_10, regions, save_location=save_location, file_name=title_of_run),
-                            # model=RICE(years_10, regions, database_POT=database_POT, table_name_POT=table_name_POT),
-                            action_names=action_names,
-                            action_bounds=action_bounds,
-                            discrete_actions=False,
-                            feature_names=feature_names,
-                            feature_bounds=feature_bounds,
-                            discrete_features=False,
-                            epsilon=0.01,
-                            max_nfe=100000,
-                            max_depth=4,
-                            population_size=100
-                            ).run()
-        df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
-        end = time.time()
-        return print(f'Total elapsed time: {(end - start)/60} minutes.')
+    # def optimization_RICE_POT_Borg(years_10, regions, save_location):
+    #     # from POT.optimization import PolicyTreeOptimizer
+    #     #
+    #     # model = RICE(years_10, regions)
+    #     # feature_bounds = [[780, 1300], [55, 2300], [2005, 2305]]
+    #     # feature_names = ['mat', 'net_output', 'year']
+    #     # action_names = ['miu_2100', 'miu_2150', 'miu_2200', 'miu_2125', 'sr_02', 'sr_03', 'sr_04', 'sr_05']
+    #     # PolicyTreeOptimizer(model.POT_control, feature_bounds=feature_bounds,
+    #     #                     feature_names=feature_names,
+    #     #                     action_names=action_names,
+    #     #                     discrete_actions=True,
+    #     #                     population_size=4,
+    #     #                     mu=2).run(max_nfe=4)
+    #
+    #     # np.random.seed(1)
+    #
+    #     title_of_run = ''
+    #     start = time.time()
+    #     # Model variables
+    #
+    #     # Tree variables
+    #     # action_names = ['miu_2100', 'miu_2150', 'miu_2200', 'miu_2125', 'sr_02', 'sr_03', 'sr_04', 'sr_05']
+    #     action_names = ['miu', 'sr', 'irstp']
+    #     action_bounds = [[2065, 2305], [0.1, 0.5], [0.001, 0.1]]
+    #     feature_names = ['mat', 'net_output', 'year']
+    #     feature_bounds = [[780, 1300], [55, 2300], [2005, 2305]]
+    #     # Save variables
+    #     # database_POT = 'C:/Users/Stijn Daemen/Documents/master thesis TU Delft/code/IAM_RICE2/jupyter notebooks/Tests_Borg.db'
+    #     # table_name_POT = 'Test3_couplingborg_not_edited_borg'
+    #
+    #     df_optimized_metrics = PolicyTreeOptimizer(model=RICE(years_10, regions, save_location=save_location, file_name=title_of_run),
+    #                         # model=RICE(years_10, regions, database_POT=database_POT, table_name_POT=table_name_POT),
+    #                         action_names=action_names,
+    #                         action_bounds=action_bounds,
+    #                         discrete_actions=False,
+    #                         feature_names=feature_names,
+    #                         feature_bounds=feature_bounds,
+    #                         discrete_features=False,
+    #                         epsilon=0.01,
+    #                         max_nfe=100000,
+    #                         max_depth=4,
+    #                         population_size=100
+    #                         ).run()
+    #     df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
+    #     end = time.time()
+    #     return print(f'Total elapsed time: {(end - start)/60} minutes.')
 
     def optimization_RICE_POT_Homemade(years_10, regions, save_location):
         title_of_run = ''
@@ -681,16 +708,11 @@ if __name__ == '__main__':
 
     # connect_to_EMA(years_10, regions, save_location)
 
-    optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
+    # optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
 
     # optimization_Folsom_Herman(save_location)
 
-    # optimization_Folsom_ForestBorg(save_location)
+    optimization_Folsom_ForestBorg(save_location)
 
-    # file_path = 'output_data/TEST_Folsom_Herman_5000nfe_snapshots.pkl'
-    #
-    # with open(file_path, "rb") as file:
-    #     snapshots = pickle.load(file)
-    #
-    # print(snapshots)
+    # optimization_Folsom_Shotgun(save_location)
 

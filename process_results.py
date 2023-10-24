@@ -2,35 +2,19 @@ import math
 import matplotlib.pyplot as plt
 
 # Import the generative model by SD
-from RICE_model.IAM_RICE import RICE
 # Import the policy tree optimizer by Herman
-from POT.ptreeopt import PTreeOpt
-import logging
 # Import the policy tree optimizer with borg
-from POT.borg_optimization import PolicyTreeOptimizer
 # Import the control - random search - 'optimizer'
-from POT.control_optimization import PolicyTreeOptimizerControl
 # Import the ema workbench by professor Kwakkel
-from ema_workbench import RealParameter, ScalarOutcome, Constant, Model, IntegerParameter
-from ema_workbench import SequentialEvaluator, ema_logging
-from ema_workbench import save_results
 # Import the homemade POT optimizer
-from POT.homemade_optimization import Cluster
-from POT.optimization_tryout import Cluster_
-from POT.forest_borg import ForestBorg
-from POT.forest_borg_Folsom import ForestBorgFolsom
 
-from folsom import Folsom
-from ptreeopt import PTreeOpt
-import logging
 import pickle
 
 import pandas as pd
 import numpy as np
 import sqlite3
-import time
 import os
-from ema_workbench import load_results, ema_logging
+
 package_directory = os.path.dirname(os.path.abspath(__file__))
 path_to_dir = os.path.join(package_directory)
 
@@ -331,10 +315,11 @@ if __name__ == '__main__':
 
 
     # -- All figures as subplots ----------
-    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_Herman_25000nfe_snapshots.pkl'
+    file_path = r'/output_data/Folsom_Herman_25000nfe_snapshots.pkl'
     data_H = ProcessResults().Pickle(file_path)
 
-    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_w_snapshots_snapshots.pkl'
+    file_path = r'/output_data/Folsom_ForestBorg_100000nfe_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_w_snapshots_snapshots.pkl'
     data_FB = ProcessResults().Pickle(file_path)
 
     # Create a 2x2 subplot grid

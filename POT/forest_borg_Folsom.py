@@ -194,7 +194,7 @@ class ForestBorgFolsom:
         return df, self.snapshot_dict
 
     def iterate(self, i):
-        if i%100 == 0:
+        if i%500 == 0:
             # Check gamma (the population to Archive ratio)
             gamma = len(self.population) / len(self.Archive)
 
@@ -470,7 +470,7 @@ class ForestBorgFolsom:
                     self.Archive = self.Archive[~np.isin(self.Archive, member)]
                 elif self.dominates(member.fitness, candidate_solution.fitness):
                     return
-                return
+                # return
         self.Archive = np.append(self.Archive, candidate_solution)
         if epsilon_progress:
             self.epsilon_progress_counter += 1
