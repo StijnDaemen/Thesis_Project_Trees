@@ -323,9 +323,16 @@ if __name__ == '__main__':
     data_H = ProcessResults().Pickle(file_path)
 
     # file_path = r'/output_data/Folsom_ForestBorg_100000nfe_snapshots.pkl'
-    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\TEST_Folsom_ForestBorg_25000nfe_new_add_Archive_snapshots.pkl'
+    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_add_Archive_no_restart_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_add_Archive_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_w_snapshots_snapshots.pkl'
     data_FB = ProcessResults().Pickle(file_path)
+
+    # Taking every other entry
+    data_half = {k: v for idx, (k, v) in enumerate(data_FB.items()) if idx % 4 == 0}
+    print('loaded')
+    print(data_FB.keys())
+    print(len(data_FB['Archive_solutions']))
 
     # Create a 2x2 subplot grid
     fig, axs = plt.subplots(2, 2, figsize=(10, 8))
@@ -342,11 +349,11 @@ if __name__ == '__main__':
     reference_point = np.array([10, 500000, 10, -100])
 
     hypervolume_metric_H = ProcessResults().calculate_generational_hypervolume(data_H['best_f'], reference_point)
-    ProcessResults().visualize_generational_metrics(hypervolume_metric_H, x_data=data_H['nfe'], ax=axs[1, 0], title='Hypervolume Herman POT', x_label='snapshot',
+    ProcessResults().visualize_generational_metrics(hypervolume_metric_H, x_data=data_H['nfe'], ax=axs[1, 0], title='Hypervolume Herman POT', x_label='nfe',
                                                    y_label='volume (-)')
     hypervolume_metric_FB = ProcessResults().calculate_generational_hypervolume(data_FB['Archive_solutions'],
                                                                              reference_point)
-    ProcessResults().visualize_generational_metrics(hypervolume_metric_FB, x_data=data_FB['nfe'], ax=axs[1, 1], title='Hypervolume ForestBorg', x_label='snapshot',
+    ProcessResults().visualize_generational_metrics(hypervolume_metric_FB, x_data=data_FB['nfe'], ax=axs[1, 1], title='Hypervolume ForestBorg', x_label='nfe',
                                                    y_label='volume (-)')
     # Add a title for the entire plot
     plt.suptitle('Convergence metrics Herman POT and ForestBORG on FOLSOM lake model')

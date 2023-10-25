@@ -352,18 +352,19 @@ class RICE:
 
             policies = policy.split('|')
             for policy_ in policies:
-                policy_unpacked = policy_.split('_')
-                policy_name = policy_unpacked[0]
-                policy_value = float(policy_unpacked[1])
+                if policy:
+                    policy_unpacked = policy_.split('_')
+                    policy_name = policy_unpacked[0]
+                    policy_value = float(policy_unpacked[1])
 
-                # print(policy_name)
+                    # print(policy_name)
 
-                if policy_name == 'miu':
-                    mu_target = policy_value
-                elif policy_name == 'sr':
-                    sr = policy_value
-                elif policy_name == 'irstp':
-                    irstp = policy_value
+                    if policy_name == 'miu':
+                        mu_target = policy_value
+                    elif policy_name == 'sr':
+                        sr = policy_value
+                    elif policy_name == 'irstp':
+                        irstp = policy_value
 
             # Run one timestep of RICE
             self.economic_submodel.run_gross(t, year, mu_target=mu_target, sr=sr)

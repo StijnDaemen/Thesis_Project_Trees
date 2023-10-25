@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 
 from statistics import mean
 
+import re
+
 '''
 The design behind this MOEA is driven by the effectiveness of randomness for our specific multi-objective model.
 Very crafty approaches like borg did not work as well as relatively straightforward approaches like Herman's POT
@@ -73,11 +75,62 @@ class Shotgun:
                               'Archive_solutions': [],
                               'Archive_trees': []}
 
+        self.action_bounds = [[1,10], [2,10], [3,10], [4,10], [5,10], [6,10], [7,10]]
+
 
 
         self.nfe = 0
 
     def run(self):
+
+        action_input = ''
+        for idx, action in enumerate(self.action_names):
+            action_value = round(self.rng_tree.uniform(*self.action_bounds[idx]), 3)
+            action_input = action_input + f'{action}_{action_value}|'
+        # Remove last '|'
+        action_input = action_input[:-1]
+        print(action_input)
+        print('-------------------------------------')
+
+        nr_actions = 2
+        for _ in range(nr_actions):
+            # randomly pick an action and a new value from its action bounds
+            num_actions = len(self.action_names)
+            x = self.rng_tree.choice(num_actions)
+            action_name = self.action_names[x]
+            action_value_new = round(self.rng_tree.uniform(*self.action_bounds[x]), 3)
+            # wrap it in a string, consistent with later processing
+            action_substring = f'{action_name}_{action_value_new}|'
+            # Replace the substring in the large string
+            pattern = re.escape(action_name) + r".*?\|"
+            action_input = re.sub(pattern, action_substring, action_input)
+
+        print(action_input)
+
+
+        print('---------------------------------------')
+
+        # actions = self.rng_mutation_subtree.choice(self.action_names, nr_actions, replace=False)
+        # for action_name in actions:
+        #     if action_name == 'miu':
+        #         action_value = self.rng_mutation_subtree.integers(*self.action_bounds[0])
+        #         item.value = GAOperators.replace_miu_substr(self, item.value, f'miu_{action_value}|')
+        #     elif action_name == 'sr':
+        #         action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)
+        #         item.value = GAOperators.replace_sr_substr(self, item.value, f'sr_{action_value}|')
+        #     elif action_name == 'irstp':
+        #         action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)
+        #         item.value = GAOperators.replace_irstp_substr(self, item.value, f'irstp_{action_value}')
+
+        action_input = ''
+        for idx, action in enumerate(self.action_names):
+            action_value = round(self.rng_tree.uniform(*self.action_bounds[idx]), 3)
+            action_input = action_input+f'{action}_{action_value}|'
+        # Remove last '|'
+        action_input = action_input[:-1]
+        print(action_input)
+        print('-------------------------------------')
+
         # Generate initial random population
         self.population = np.array([self.spawn(heritage='random') for _ in range(self.pop_size)])
         print(f'size pop: {np.size(self.population)}')

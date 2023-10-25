@@ -344,7 +344,7 @@ if __name__ == '__main__':
                                           mutation_prob=0.5,
                                           max_nfe=25000,
                                           epsilons=[0.01, 1000, 0.01, 10],
-                                          gamma=4,
+                                          gamma=2,
                                           tau=0.02,
                                           save_location=save_location,
                                           title_of_run=title_of_run,
@@ -376,22 +376,22 @@ if __name__ == '__main__':
         master_rng = np.random.default_rng(42)  # Master RNG
         snapshots = Shotgun(model=model,
                     master_rng=master_rng,
-                metrics=['period_utility', 'damages', 'temp_overshoots'],
-                # Tree variables
-                action_names=['Release_Demand', 'Hedge_90', 'Hedge_80',
-                              'Hedge_70', 'Hedge_60', 'Hedge_50', 'Flood_Control'],
-                action_bounds=None,
-                feature_bounds=[[0, 1000], [1, 365], [0, 300]],
-                feature_names=['Storage', 'Day', 'Inflow'],
-                max_depth=5,
-                discrete_actions=True,
-                discrete_features=None,
-                # Optimization variables
-                mutation_prob=0.5,
-                pop_size=100,
-                max_nfe=2000,
-                epsilons=np.array([0.01, 1000, 0.01, 10]),
-                ).run()
+                    metrics=['period_utility', 'damages', 'temp_overshoots'],
+                    # Tree variables
+                    action_names=['Release_Demand', 'Hedge-90', 'Hedge-80',
+                                  'Hedge-70', 'Hedge-60', 'Hedge-50', 'Flood_Control'],
+                    action_bounds=None,
+                    feature_bounds=[[0, 1000], [1, 365], [0, 300]],
+                    feature_names=['Storage', 'Day', 'Inflow'],
+                    max_depth=5,
+                    discrete_actions=True,
+                    discrete_features=None,
+                    # Optimization variables
+                    mutation_prob=0.5,
+                    pop_size=10,
+                    max_nfe=2000,
+                    epsilons=np.array([0.01, 1000, 0.01, 10]),
+                    ).run()
         # df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
         pickle.dump(snapshots, open(f'{save_location}/{title_of_run}_snapshots.pkl', 'wb'))
         end = time.time()
@@ -674,10 +674,10 @@ if __name__ == '__main__':
         title_of_run = 'TESTforestborg'
         start = time.time()
 
+        model = RICE(years_10, regions)
         master_rng = np.random.default_rng(42)  # Master RNG
         df_optimized_metrics = ForestBorg(pop_size=100, master_rng=master_rng,
-                                          years_10=years_10,
-                                          regions=regions,
+                                          model=model,
                                           metrics=['period_utility', 'damages', 'temp_overshoots'],
                                           # Tree variables
                                           action_names=['miu', 'sr', 'irstp'],
@@ -689,7 +689,7 @@ if __name__ == '__main__':
                                           discrete_features=False,
                                           # Optimization variables
                                           mutation_prob=0.5,
-                                          max_nfe=500000,
+                                          max_nfe=1000,
                                           epsilons=np.array([0.05, 0.05, 0.05]),
                                           gamma=4,
                                           tau=0.02,
@@ -713,7 +713,7 @@ if __name__ == '__main__':
 
     # optimization_Folsom_Herman(save_location)
 
-    # optimization_Folsom_ForestBorg(save_location)
+    optimization_Folsom_ForestBorg(save_location)
 
-    optimization_Folsom_Shotgun(save_location)
+    # optimization_Folsom_Shotgun(save_location)
 

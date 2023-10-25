@@ -18,8 +18,7 @@ import sqlite3
 
 class ForestBorg:
     def __init__(self, pop_size, master_rng,
-                 years_10,
-                 regions,
+                 model,
                  metrics,
                  action_names,
                  action_bounds,
@@ -55,7 +54,7 @@ class ForestBorg:
         self.rng_mutation_subtree = np.random.default_rng(master_rng.integers(0, 1e9))
         self.rng_choose_operator = np.random.default_rng(master_rng.integers(0, 1e9))
 
-        self.model = RICE(years_10, regions)
+        self.model = model
 
         self.metrics = metrics
         self.action_names = action_names
@@ -115,7 +114,7 @@ class ForestBorg:
         # -- main loop -----------------------------------------
 
         last_snapshot = 0
-        main_loop_counter = 0
+        main_loop_counter = 1
         # log_counter = 0
         while self.nfe < self.max_nfe:
             self.iterate(main_loop_counter)
@@ -124,10 +123,8 @@ class ForestBorg:
 
             if self.nfe >= last_snapshot + snapshot_frequency:
                 last_snapshot = self.nfe
-                self.snapshot_dict['nfe'].append(self.nfe)
-                self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
-                self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
-                self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
+                # Record snapshot
+                self.record_snapshot()
 
                 intermediate_time = time.time()
                 print(
@@ -156,11 +153,11 @@ class ForestBorg:
         # -- Create visualizations of the run -------------------
         self.end_time = time.time()
 
-        data_dict = {}
-        for item in self.Archive:
-            data_dict[item.dna] = [item.fitness[0], item.fitness[1], item.fitness[2]]
-        df = pd.DataFrame.from_dict(data_dict, orient='index')
-        # df.to_excel('500000nfe_0_05epsilon_Archive_solutions.xlsx')
+        # data_dict = {}
+        # for item in self.Archive:
+        #     data_dict[item.dna] = [item.fitness[0], item.fitness[1], item.fitness[2]]
+        # df = pd.DataFrame.from_dict(data_dict, orient='index')
+        # # df.to_excel('500000nfe_0_05epsilon_Archive_solutions.xlsx')
 
         print(
             f'Total elapsed time: {(self.end_time - self.start_time) / 60} min -- {len(self.Archive)} non-dominated solutions were found.')
@@ -169,14 +166,14 @@ class ForestBorg:
                                                          title=f'epsilon_progress_{self.file_name}',
                                                          x_label='generation', y_label='epsilon-progress', save=True)
 
-        Archive_in_objective_space = []
-        for member in self.Archive:
-            Archive_in_objective_space.append(member.fitness)
-        # print(Archive_in_objective_space)
-        MOEAVisualizations(self.save_location).visualize_organisms_objective_space(Archive_in_objective_space,
-                                                               title=f'3d_{self.file_name}',
-                                                               x_label='welfare', y_label='damages',
-                                                               z_label='temp. overshoots', save=True)
+        # Archive_in_objective_space = []
+        # for member in self.Archive:
+        #     Archive_in_objective_space.append(member.fitness)
+        # # print(Archive_in_objective_space)
+        # MOEAVisualizations(self.save_location).visualize_organisms_objective_space(Archive_in_objective_space,
+        #                                                        title=f'3d_{self.file_name}',
+        #                                                        x_label='welfare', y_label='damages',
+        #                                                        z_label='temp. overshoots', save=True)
 
         # Visualize operator distribution
         MOEAVisualizations(self.save_location).visualize_operator_distribution(self.GAOperators,
@@ -185,7 +182,7 @@ class ForestBorg:
         return df
 
     def iterate(self, i):
-        if i%500 == 0:
+        if i%5000 == 0:
             # Check gamma (the population to Archive ratio)
             gamma = len(self.population) / len(self.Archive)
 
@@ -337,7 +334,11 @@ class ForestBorg:
                 if self.discrete_actions:
                     L.append([str(self.rng_tree.choice(self.action_names))])
                 else:
-                    action_input = f'miu_{self.rng_tree.integers(*self.action_bounds[0])}|sr_{round(self.rng_tree.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_tree.uniform(*self.action_bounds[2]), 3)}'
+                    action_input = ''
+                    for idx, action in enumerate(self.action_names):
+                        action_value = round(self.rng_tree.uniform(*self.action_bounds[idx]), 3)
+                        action_input = action_input + f'{action}_{action_value}|'
+                    # action_input = f'miu_{self.rng_tree.integers(*self.action_bounds[0])}|sr_{round(self.rng_tree.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_tree.uniform(*self.action_bounds[2]), 3)}'
                     L.append([action_input])
             else:
                 x = self.rng_tree.choice(num_features)
@@ -461,7 +462,6 @@ class ForestBorg:
                     self.Archive = self.Archive[~np.isin(self.Archive, member)]
                 elif self.dominates(member.fitness, candidate_solution.fitness):
                     return
-                # return
         self.Archive = np.append(self.Archive, candidate_solution)
         if epsilon_progress:
             self.epsilon_progress_counter += 1
@@ -495,6 +495,13 @@ class ForestBorg:
             # self.population.append(offspring)
             self.population = self.population[~np.isin(self.population, kick_out)]
             self.population = np.append(self.population, offspring)
+        return
+
+    def record_snapshot(self):
+        self.snapshot_dict['nfe'].append(self.nfe)
+        self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
+        self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
+        self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
         return
 
 
@@ -584,17 +591,31 @@ class GAOperators(ForestBorg):
                 if self.discrete_actions:
                     node.value = str(self.rng_mutation_subtree.choice(self.action_names))
                 else:
-                    actions = self.rng_mutation_subtree.choice(self.action_names, nr_actions, replace=False)
-                    for action_name in actions:
-                        if action_name == 'miu':
-                            action_value = self.rng_mutation_subtree.integers(*self.action_bounds[0])
-                            node.value = GAOperators.replace_miu_substr(self, node.value, f'miu_{action_value}|')
-                        elif action_name == 'sr':
-                            action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)
-                            node.value = GAOperators.replace_sr_substr(self, node.value, f'sr_{action_value}|')
-                        elif action_name == 'irstp':
-                            action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)
-                            node.value = GAOperators.replace_irstp_substr(self, node.value, f'irstp_{action_value}')
+                    action_input = node.value
+                    for _ in range(nr_actions):
+                        # randomly pick an action and a new value from its action bounds
+                        num_actions = len(self.action_names)
+                        x = self.rng_mutation_subtree.choice(num_actions)
+                        action_name = self.action_names[x]
+                        action_value_new = round(self.rng_mutation_subtree.uniform(*self.action_bounds[x]), 3)
+                        # wrap it in a string, consistent with later processing
+                        action_substring = f'{action_name}_{action_value_new}|'
+                        # Replace the substring in the large string
+                        pattern = re.escape(action_name) + r".*?\|"
+                        action_input = re.sub(pattern, action_substring, action_input)
+                    node.value = action_input
+
+                    # actions = self.rng_mutation_subtree.choice(self.action_names, nr_actions, replace=False)
+                    # for action_name in actions:
+                    #     if action_name == 'miu':
+                    #         action_value = self.rng_mutation_subtree.integers(*self.action_bounds[0])
+                    #         node.value = GAOperators.replace_miu_substr(self, node.value, f'miu_{action_value}|')
+                    #     elif action_name == 'sr':
+                    #         action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)
+                    #         node.value = GAOperators.replace_sr_substr(self, node.value, f'sr_{action_value}|')
+                    #     elif action_name == 'irstp':
+                    #         action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)
+                    #         node.value = GAOperators.replace_irstp_substr(self, node.value, f'irstp_{action_value}')
         return T
 
     def mutation_point(self, T, nr_actions):
@@ -604,25 +625,39 @@ class GAOperators(ForestBorg):
         if item.is_feature:
             low, high = self.feature_bounds[item.index]
             if item.is_discrete:
-                item.threshold = self.rng_mutate.integers(low, high + 1)
+                item.threshold = self.rng_mutation_point.integers(low, high + 1)
             else:
                 item.threshold = self.bounded_gaussian(
                     item.threshold, [low, high])
         else:
             if self.discrete_actions:
-                item.value = str(self.rng_mutate.choice(self.action_names))
+                item.value = str(self.rng_mutation_point.choice(self.action_names))
             else:
-                actions = self.rng_mutation_subtree.choice(self.action_names, nr_actions, replace=False)
-                for action_name in actions:
-                    if action_name == 'miu':
-                        action_value = self.rng_mutation_subtree.integers(*self.action_bounds[0])
-                        item.value = GAOperators.replace_miu_substr(self, item.value, f'miu_{action_value}|')
-                    elif action_name == 'sr':
-                        action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)
-                        item.value = GAOperators.replace_sr_substr(self, item.value, f'sr_{action_value}|')
-                    elif action_name == 'irstp':
-                        action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)
-                        item.value = GAOperators.replace_irstp_substr(self, item.value, f'irstp_{action_value}')
+                action_input = item.value
+                for _ in range(nr_actions):
+                    # randomly pick an action and a new value from its action bounds
+                    num_actions = len(self.action_names)
+                    x = self.rng_mutation_point.choice(num_actions)
+                    action_name = self.action_names[x]
+                    action_value_new = round(self.rng_mutation_point.uniform(*self.action_bounds[x]), 3)
+                    # wrap it in a string, consistent with later processing
+                    action_substring = f'{action_name}_{action_value_new}|'
+                    # Replace the substring in the large string
+                    pattern = re.escape(action_name) + r".*?\|"
+                    action_input = re.sub(pattern, action_substring, action_input)
+                item.value = action_input
+
+                # actions = self.rng_mutation_subtree.choice(self.action_names, nr_actions, replace=False)
+                # for action_name in actions:
+                #     if action_name == 'miu':
+                #         action_value = self.rng_mutation_subtree.integers(*self.action_bounds[0])
+                #         item.value = GAOperators.replace_miu_substr(self, item.value, f'miu_{action_value}|')
+                #     elif action_name == 'sr':
+                #         action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[1]), 3)
+                #         item.value = GAOperators.replace_sr_substr(self, item.value, f'sr_{action_value}|')
+                #     elif action_name == 'irstp':
+                #         action_value = round(self.rng_mutation_subtree.uniform(*self.action_bounds[2]), 3)
+                #         item.value = GAOperators.replace_irstp_substr(self, item.value, f'irstp_{action_value}')
         return T
 
     def mutation_random(self, P, mutate_actions=True):
@@ -642,7 +677,11 @@ class GAOperators(ForestBorg):
                         item.value = str(self.rng_mutate.choice(self.action_names))
                     else:
                         # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
-                        action_input = f'miu_{self.rng_mutate.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutate.uniform(*self.action_bounds[1]),3 )}|irstp_{round(self.rng_mutate.uniform(*self.action_bounds[2]), 3)}'
+                        action_input = ''
+                        for idx, action in enumerate(self.action_names):
+                            action_value = round(self.rng_tree.uniform(*self.action_bounds[idx]), 3)
+                            action_input = action_input + f'{action}_{action_value}|'
+                        # action_input = f'miu_{self.rng_mutate.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutate.uniform(*self.action_bounds[1]),3 )}|irstp_{round(self.rng_mutate.uniform(*self.action_bounds[2]), 3)}'
                         item.value = action_input
 
         return P
@@ -852,3 +891,494 @@ class MOEAVisualizations:
 #                   gamma=4,
 #                   tau=0.02,
 #                   ).run()
+
+
+# --------------------------------------------------------------------
+# class ForestBorg:
+#     def __init__(self, pop_size, master_rng,
+#                  years_10,
+#                  regions,
+#                  metrics,
+#                  action_names,
+#                  action_bounds,
+#                  feature_names,
+#                  feature_bounds,
+#                  max_depth,
+#                  discrete_actions,
+#                  discrete_features,
+#                  mutation_prob,
+#                  max_nfe,
+#                  epsilons,
+#                  gamma=4,
+#                  tau=0.02,
+#                  save_location=None,
+#                  title_of_run=None, ):
+#
+#         self.pop_size = pop_size
+#
+#         self.rng_init = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_populate = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_natural_selection = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_tree = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_crossover = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_mutate = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_gauss = np.random.default_rng(master_rng.integers(0, 1e9))
+#
+#         self.rng_iterate = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_tournament = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_population = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_revive = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_crossover_subtree = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_mutation_point = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_mutation_subtree = np.random.default_rng(master_rng.integers(0, 1e9))
+#         self.rng_choose_operator = np.random.default_rng(master_rng.integers(0, 1e9))
+#
+#         self.model = RICE(years_10, regions)
+#
+#         self.metrics = metrics
+#         self.action_names = action_names
+#         self.action_bounds = action_bounds
+#         self.feature_names = feature_names
+#         self.feature_bounds = feature_bounds
+#         self.max_depth = max_depth
+#         self.discrete_actions = discrete_actions
+#         self.discrete_features = discrete_features
+#         self.mutation_prob = mutation_prob
+#         self.max_nfe = max_nfe
+#         self.epsilons = epsilons
+#         self.gamma = gamma
+#         self.tau = tau
+#         self.tournament_size = 2
+#
+#         self.epsilon_progress_counter = 0
+#         self.epsilon_progress_tracker = np.array([])
+#         self.snapshot_dict = {'nfe': [],
+#                               'time': [],
+#                               'Archive_solutions': [],
+#                               'Archive_trees': []}
+#
+#         self.number_of_restarts = 0
+#
+#         self.GAOperators = {'mutation_point_1': [0],
+#                             'mutation_point_2': [0],
+#                             'mutation_point_3': [0],
+#                             'mutation_subtree_1': [0],
+#                             'mutation_subtree_2': [0],
+#                             'mutation_subtree_3': [0],
+#                             'mutation_random': [0],
+#                             }
+#
+#         self.nfe = 0
+#
+#         self.start_time = time.time()
+#
+#         self.save_location = save_location
+#         self.file_name = title_of_run
+#         # Initialize sqlite database to save outcomes of a run - note use one universal database called 'Experiments.db'
+#         if save_location:
+#             self.database = f'{save_location}/Experiments.db'
+#         else:
+#             self.database = None
+#
+#     def run(self, snapshot_frequency=100):
+#         self.population = np.array([self.spawn() for _ in range(self.pop_size)])
+#         print(f'size pop: {np.size(self.population)}')
+#
+#         # Add the epsilon non-dominated solutions from the population to the Archive (initialize the Archive with the initial population, running add_to_Archive() function ensures no duplicates will be present.
+#         self.Archive = np.array([self.population[0]])
+#         for sol in self.population:
+#             self.add_to_Archive(sol)
+#         print(f'size Archive: {np.size(self.Archive)}')
+#
+#         # -- main loop -----------------------------------------
+#
+#         last_snapshot = 0
+#         main_loop_counter = 0
+#         # log_counter = 0
+#         while self.nfe < self.max_nfe:
+#             self.iterate(main_loop_counter)
+#             main_loop_counter += 1
+#             # log_counter += 1
+#
+#             if self.nfe >= last_snapshot + snapshot_frequency:
+#                 last_snapshot = self.nfe
+#                 # Record snapshot
+#                 self.record_snapshot()
+#
+#                 intermediate_time = time.time()
+#                 print(
+#                     f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
+#                     end='', flush=True)
+#
+#             # if log_counter % 100 == 0:
+#             #     # Archive snapshots
+#             #     data_dict = {}
+#             #     for idx, item in enumerate(self.Archive):
+#             #         data_dict[f'{self.nfe}_{idx}_snapshot'] = [item.fitness[0], item.fitness[1], item.fitness[2],
+#             #                                                  str(item.dna)]
+#             #     df = pd.DataFrame.from_dict(data_dict, orient='index')
+#             #
+#             #     conn = sqlite3.connect(self.database)
+#             #     df.to_sql(name=f'archive_snapshots_{self.file_name}', con=conn, if_exists='append')
+#             #     conn.commit()
+#             #     conn.close()
+#             #
+#             # if log_counter % 50 == 0:
+#             #     intermediate_time = time.time()
+#             #     print(
+#             #         f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
+#             #         end='', flush=True)
+#
+#         # -- Create visualizations of the run -------------------
+#         self.end_time = time.time()
+#
+#         data_dict = {}
+#         for item in self.Archive:
+#             data_dict[item.dna] = [item.fitness[0], item.fitness[1], item.fitness[2]]
+#         df = pd.DataFrame.from_dict(data_dict, orient='index')
+#         # df.to_excel('500000nfe_0_05epsilon_Archive_solutions.xlsx')
+#
+#         print(
+#             f'Total elapsed time: {(self.end_time - self.start_time) / 60} min -- {len(self.Archive)} non-dominated solutions were found.')
+#
+#         MOEAVisualizations(self.save_location).visualize_generational_series(self.epsilon_progress_tracker,
+#                                                                              title=f'epsilon_progress_{self.file_name}',
+#                                                                              x_label='generation',
+#                                                                              y_label='epsilon-progress', save=True)
+#
+#         Archive_in_objective_space = []
+#         for member in self.Archive:
+#             Archive_in_objective_space.append(member.fitness)
+#         # print(Archive_in_objective_space)
+#         MOEAVisualizations(self.save_location).visualize_organisms_objective_space(Archive_in_objective_space,
+#                                                                                    title=f'3d_{self.file_name}',
+#                                                                                    x_label='welfare', y_label='damages',
+#                                                                                    z_label='temp. overshoots',
+#                                                                                    save=True)
+#
+#         # Visualize operator distribution
+#         MOEAVisualizations(self.save_location).visualize_operator_distribution(self.GAOperators,
+#                                                                                title=f'operator_distribution_{self.file_name}',
+#                                                                                x_label='Generation', y_label='Count',
+#                                                                                save=True)
+#         return df
+#
+#     def iterate(self, i):
+#         if i % 5000 == 0:
+#             # Check gamma (the population to Archive ratio)
+#             gamma = len(self.population) / len(self.Archive)
+#
+#             # Trigger restart if the latest epsilon tracker value is not different from the previous 3 -> 4ht iteration without progress.
+#             # Officially in the borg paper I believe it is triggered if the latest epsilon tracker value is the same as the one of that before
+#
+#             if self.check_unchanged(self.epsilon_progress_tracker):
+#                 self.restart(self.Archive, self.gamma, self.tau)
+#             # Check if gamma value warrants a restart (see Figure 2 in paper borg)
+#             elif (gamma > 1.25 * self.gamma) or (gamma < 0.75 * self.gamma):
+#                 # self.revive_search(gamma)
+#                 self.restart(self.Archive, self.gamma, self.tau)
+#
+#         # Selection of recombination operator
+#         parents_required = 2
+#         parents = []
+#         # One parent is uniformly randomly selected from the archive
+#         parents.append(self.rng_iterate.choice(self.Archive))
+#         # The other parent(s) are selected from the population using tournament selection
+#         for parent in range(parents_required - 1):
+#             parents.append(self.tournament(self.tournament_size))
+#
+#         # Create the offspring
+#         offspring = Organism()
+#         offspring.dna = GAOperators.crossover_subtree(self, parents[0].dna, parents[1].dna)[0]
+#         # Let it mutate (in-built chance of mutation)
+#         offspring = self.mutate_with_feedbackloop(offspring)
+#         offspring.fitness = self.policy_tree_RICE_fitness(offspring.dna)
+#         self.nfe += 1
+#
+#         # Add to population
+#         self.add_to_population(offspring)
+#
+#         # Add to Archive if eligible
+#         self.add_to_Archive(offspring)
+#
+#         # Update the epsilon progress tracker
+#         self.epsilon_progress_tracker = np.append(self.epsilon_progress_tracker, self.epsilon_progress_counter)
+#
+#         # Record GA operator distribution
+#         self.record_GAOperator_distribution()
+#         return
+#
+#     def record_GAOperator_distribution(self):
+#         # Count the occurrences of each attribute value
+#         distribution = Counter(member.operator for member in self.Archive)
+#         for key in self.GAOperators.keys():
+#             if key in distribution:
+#                 self.GAOperators[key].append(distribution[key])
+#             else:
+#                 self.GAOperators[key].append(0)
+#         return
+#
+#     def check_unchanged(self, lst):
+#         if len(lst) > 3:
+#             for i in range(3, len(lst)):
+#                 if lst[i - 3] == lst[i - 2] == lst[i - 1]:
+#                     return True
+#         return False
+#
+#     def mutate_with_feedbackloop(self, offspring):
+#         # TODO:: This is super hacky and bad programming, must change action handling and operator selection after proof-of-concept
+#         # Mutation based on performance feedback loop
+#         operator = GAOperators.choose_mutation_operator(self)
+#         if operator == 'mutation_point_1':
+#             offspring.dna = GAOperators.mutation_point(self, offspring.dna, 1)
+#             offspring.operator = operator
+#         elif operator == 'mutation_point_2':
+#             offspring.dna = GAOperators.mutation_point(self, offspring.dna, 2)
+#             offspring.operator = operator
+#         elif operator == 'mutation_point_3':
+#             offspring.dna = GAOperators.mutation_point(self, offspring.dna, 3)
+#             offspring.operator = operator
+#         elif operator == 'mutation_subtree_1':
+#             offspring.dna = GAOperators.mutation_subtree(self, offspring.dna, 1)
+#             offspring.operator = operator
+#         elif operator == 'mutation_subtree_2':
+#             offspring.dna = GAOperators.mutation_subtree(self, offspring.dna, 2)
+#             offspring.operator = operator
+#         elif operator == 'mutation_subtree_3':
+#             offspring.dna = GAOperators.mutation_subtree(self, offspring.dna, 3)
+#             offspring.operator = operator
+#         elif operator == 'mutation_random':
+#             offspring.dna = GAOperators.mutation_random(self, offspring.dna)
+#             offspring.operator = operator
+#         return offspring
+#
+#     def restart(self, current_Archive, gamma, tau):
+#         self.population = np.array([])
+#         self.population = current_Archive
+#         new_size = gamma * len(current_Archive)
+#         # Inject mutated Archive members into the new population
+#         while len(self.population) < new_size:
+#             # Select a random solution from the Archive
+#             volunteer = self.rng_revive.choice(current_Archive)
+#             volunteer = self.mutate_with_feedbackloop(volunteer)
+#             volunteer.fitness = self.policy_tree_RICE_fitness(volunteer.dna)
+#             # # Now try with completely new solutions as that seemed kind of promising in trials
+#             # volunteer = self.spawn()
+#             self.nfe += 1
+#             # Add new solution to population
+#             if self.population.size > 0:
+#                 self.add_to_population(volunteer)
+#             else:
+#                 self.population = np.append(self.population, volunteer)
+#             # Update Archive with new solution
+#             self.add_to_Archive(volunteer)
+#         # Adjust tournament size to account for the new population size
+#         self.tournament_size = max(2, math.floor(tau * new_size))
+#         self.number_of_restarts += 1
+#         return
+#
+#     def tournament(self, k):
+#         # Choose k random members in the population
+#         members = self.rng_tournament.choice(self.population, k)
+#         # Winner is defined by pareto dominance.
+#         # If there are no winners, take a random member, if there are, take a random winner.
+#         winners = []
+#         for idx in range(len(members) - 1):
+#             if self.dominates(members[idx].fitness, members[idx + 1].fitness):
+#                 winners.append(members[idx])
+#             elif self.dominates(members[idx + 1].fitness, members[idx].fitness):
+#                 winners.append(members[idx + 1])
+#
+#         if not winners:
+#             return self.rng_tournament.choice(members, 1)[0]
+#         else:
+#             return self.rng_tournament.choice(winners, 1)[0]
+#
+#     def spawn(self):
+#         organism = Organism()
+#         organism.dna = self.random_tree()
+#         organism.fitness = self.policy_tree_RICE_fitness(organism.dna)
+#         return organism
+#
+#     def random_tree(self, terminal_ratio=0.5):
+#         num_features = len(self.feature_names)
+#
+#         depth = self.rng_tree.integers(1, self.max_depth + 1)
+#         L = []
+#         S = [0]
+#
+#         while S:
+#             current_depth = S.pop()
+#
+#             # action node
+#             if current_depth == depth or (current_depth > 0 and
+#                                           self.rng_tree.random() < terminal_ratio):
+#                 if self.discrete_actions:
+#                     L.append([str(self.rng_tree.choice(self.action_names))])
+#                 else:
+#                     action_input = f'miu_{self.rng_tree.integers(*self.action_bounds[0])}|sr_{round(self.rng_tree.uniform(*self.action_bounds[1]), 3)}|irstp_{round(self.rng_tree.uniform(*self.action_bounds[2]), 3)}'
+#                     L.append([action_input])
+#             else:
+#                 x = self.rng_tree.choice(num_features)
+#                 v = self.rng_tree.uniform(*self.feature_bounds[x])
+#                 L.append([x, v])
+#                 S += [current_depth + 1] * 2
+#
+#         T = PTree(L, self.feature_names, self.discrete_features)
+#         T.prune()
+#         return T
+#
+#     def policy_tree_RICE_fitness(self, T):
+#         metrics = np.array(self.model.POT_control(T))
+#         return metrics
+#
+#     def crossover(self, P1, P2):
+#         P1, P2 = [copy.deepcopy(P) for P in (P1, P2)]
+#         # should use indices of ONLY feature nodes
+#         feature_ix1 = [i for i in range(P1.N) if P1.L[i].is_feature]
+#         feature_ix2 = [i for i in range(P2.N) if P2.L[i].is_feature]
+#         index1 = self.rng_crossover.choice(feature_ix1)
+#         index2 = self.rng_crossover.choice(feature_ix2)
+#         slice1 = P1.get_subtree(index1)
+#         slice2 = P2.get_subtree(index2)
+#         P1.L[slice1], P2.L[slice2] = P2.L[slice2], P1.L[slice1]
+#         P1.build()
+#         P2.build()
+#         return (P1, P2)
+#
+#     # def mutate(self, P, mutate_actions=True):
+#     # P = copy.deepcopy(P)
+#     #
+#     # for item in P.L:
+#     #     if self.rng_mutate.random() < self.mutation_prob:
+#     #         if item.is_feature:
+#     #             low, high = self.feature_bounds[item.index]
+#     #             if item.is_discrete:
+#     #                 item.threshold = self.rng_mutate.integers(low, high + 1)
+#     #             else:
+#     #                 item.threshold = self.bounded_gaussian(
+#     #                     item.threshold, [low, high])
+#     #         elif mutate_actions:
+#     #             if self.discrete_actions:
+#     #                 item.value = str(self.rng_mutate.choice(self.action_names))
+#     #             else:
+#     #                 # print(item)
+#     #                 # print(self.action_bounds)
+#     #                 # print(item.value)
+#     #                 # item.value = self.bounded_gaussian(
+#     #                 #     item.value, self.action_bounds)
+#     #
+#     #                 # --------
+#     #                 # a = np.random.choice(len(self.action_names))  # SD changed
+#     #                 # action_name = self.action_names[a]
+#     #                 # action_value = np.random.uniform(*self.action_bounds[a])
+#     #                 # action_input = f'{action_name}_{action_value}'
+#     #                 # # print(action_input)
+#     #                 # item.value = action_input
+#     #
+#     #                 # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
+#     #                 action_input = f'miu_{self.rng_mutate.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutate.uniform(*self.action_bounds[1]),3 )}|irstp_{round(self.rng_mutate.uniform(*self.action_bounds[2]), 3)}'
+#     #                 item.value = action_input
+#     #
+#     # return P
+#
+#     def bounded_gaussian(self, x, bounds):
+#         # do mutation in normalized [0,1] to avoid sigma scaling issues
+#         lb, ub = bounds
+#         xnorm = (x - lb) / (ub - lb)
+#         x_trial = np.clip(xnorm + self.rng_gauss.normal(0, scale=0.1), 0, 1)
+#
+#         return lb + x_trial * (ub - lb)
+#
+#     def natural_selection(self, A):
+#         N = len(A)
+#         keep = np.ones(N, dtype=bool)
+#
+#         for i in range(N):
+#             for j in range(i + 1, N):
+#                 if keep[j] and self.dominates(A[i].fitness - self.epsilons, A[j].fitness):
+#                     keep[j] = False
+#
+#                 elif keep[i] and self.dominates(A[j].fitness - self.epsilons, A[i].fitness):
+#                     keep[i] = False
+#
+#                 elif self.same_box(A[i].fitness, A[j].fitness):
+#                     keep[self.rng_natural_selection.choice([i, j])] = False
+#
+#         return A[keep]
+#
+#     def dominates(self, a, b):
+#         # assumes minimization
+#         # a dominates b if it is <= in all objectives and < in at least one
+#         # Note SD: somehow the logic with np.all() breaks down if there are positive and negative numbers in the array
+#         # So to circumvent this but still allow multiobjective optimisation in different directions under the
+#         # constraint that every number is positive, just add a large number to every index.
+#
+#         large_number = 1000000000
+#         a = a + large_number
+#         b = b + large_number
+#
+#         return np.all(a <= b) and np.any(a < b)
+#
+#     def same_box(self, a, b):
+#         if np.any(self.epsilons):
+#             a = a // self.epsilons
+#             b = b // self.epsilons
+#         return np.all(a == b)
+#
+#     def add_to_Archive(self, candidate_solution):
+#         epsilon_progress = False
+#         for member in self.Archive:
+#             if self.dominates(candidate_solution.fitness, member.fitness - self.epsilons):
+#                 # self.Archive.remove(member)
+#                 self.Archive = self.Archive[~np.isin(self.Archive, member)]
+#                 epsilon_progress = True
+#             elif self.dominates(member.fitness - self.epsilons, candidate_solution.fitness):
+#                 # Check if they fall in the same box, if so, keep purely dominant solution
+#                 if self.dominates(candidate_solution.fitness, member.fitness):
+#                     # self.Archive.remove(member)
+#                     self.Archive = self.Archive[~np.isin(self.Archive, member)]
+#                 elif self.dominates(member.fitness, candidate_solution.fitness):
+#                     return
+#         self.Archive = np.append(self.Archive, candidate_solution)
+#         if epsilon_progress:
+#             self.epsilon_progress_counter += 1
+#         return
+#
+#     def add_to_population(self, offspring):
+#         # If the offspring dominates one or more population members, the offspring replaces
+#         # one of these dominated members randomly.
+#
+#         #  If the offspring is dominated by at least one population member, the offspring
+#         #  is not added to the population.
+#
+#         # Otherwise, the offspring is nondominated and replaces a randomly selected member
+#         # of the population.
+#
+#         members_to_be_randomly_rejected = []
+#         for idx, member in enumerate(self.population):
+#             if self.dominates(offspring.fitness, member.fitness):
+#                 members_to_be_randomly_rejected.append(idx)
+#             elif self.dominates(member.fitness, offspring.fitness):
+#                 return
+#
+#         if members_to_be_randomly_rejected:
+#             # self.population.pop(self.rng_population.choice(members_to_be_randomly_rejected))
+#             # self.population.append(offspring)
+#             self.population = self.population[
+#                 ~np.isin(self.population, self.rng_population.choice(members_to_be_randomly_rejected))]
+#             self.population = np.append(self.population, offspring)
+#         else:
+#             kick_out = self.rng_population.choice(len(self.population))
+#             # self.population.pop(kick_out)
+#             # self.population.append(offspring)
+#             self.population = self.population[~np.isin(self.population, kick_out)]
+#             self.population = np.append(self.population, offspring)
+#         return
+#
+#     def record_snapshot(self):
+#         self.snapshot_dict['nfe'].append(self.nfe)
+#         self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
+#         self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
+#         self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
+#         return

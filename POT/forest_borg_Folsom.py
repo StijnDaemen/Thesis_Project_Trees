@@ -77,7 +77,7 @@ class ForestBorgFolsom:
         self.tournament_size = 2
 
         self.epsilon_progress_counter = 0
-        self.epsilon_progress_tracker = np.array([])
+        self.epsilon_progress_tracker = np.array([0])
         self.snapshot_dict = {'nfe': [],
                               'time': [],
                               'Archive_solutions': [],
@@ -118,7 +118,7 @@ class ForestBorgFolsom:
 
         # -- main loop -----------------------------------------
         last_snapshot = 0
-        main_loop_counter = 0
+        main_loop_counter = 1
         # log_counter = 0
         while self.nfe < self.max_nfe:
             self.iterate(main_loop_counter)
@@ -126,6 +126,7 @@ class ForestBorgFolsom:
 
             if self.nfe >= last_snapshot + snapshot_frequency:
                 last_snapshot = self.nfe
+                self.record_snapshot()
                 # self.snapshot_dict['nfe'].append(self.nfe)
                 # self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
                 # self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
@@ -133,7 +134,7 @@ class ForestBorgFolsom:
 
                 intermediate_time = time.time()
                 print(
-                    f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
+                    f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_tracker[-1]} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
                     end='', flush=True)
 
             # log_counter += 1
@@ -194,7 +195,11 @@ class ForestBorgFolsom:
         return df, self.snapshot_dict
 
     def iterate(self, i):
-        if i%500 == 0:
+        self.epsilon_progress_counter = 0
+        print(f'population: {len(self.population)}')
+        print(f'Archive: {len(self.Archive)}')
+        print(f'gamma: {len(self.population) / len(self.Archive)}')
+        if i%10 == 0:
             # Check gamma (the population to Archive ratio)
             gamma = len(self.population) / len(self.Archive)
 
@@ -202,11 +207,13 @@ class ForestBorgFolsom:
             # Officially in the borg paper I believe it is triggered if the latest epsilon tracker value is the same as the one of that before
 
             if self.check_unchanged(self.epsilon_progress_tracker):
+                print('through epsilon')
                 self.restart(self.Archive, self.gamma, self.tau)
-            # Check if gamma value warrants a restart (see Figure 2 in paper borg)
-            elif (gamma > 1.25 * self.gamma) or (gamma < 0.75 * self.gamma):
-                # self.revive_search(gamma)
-                self.restart(self.Archive, self.gamma, self.tau)
+            # # Check if gamma value warrants a restart (see Figure 2 in paper borg)
+            # elif (gamma > 1.5 * self.gamma) or (gamma < 0.5 * self.gamma):
+            #     # self.revive_search(gamma)
+            #     print('through gamma')
+            #     self.restart(self.Archive, self.gamma, self.tau)
 
         # Selection of recombination operator
         parents_required = 2
@@ -232,13 +239,13 @@ class ForestBorgFolsom:
         self.add_to_Archive(offspring)
 
         # Update the epsilon progress tracker
-        self.epsilon_progress_tracker = np.append(self.epsilon_progress_tracker, self.epsilon_progress_counter)
+        self.epsilon_progress_tracker = np.append(self.epsilon_progress_tracker, self.epsilon_progress_tracker[-1] + self.epsilon_progress_counter)
 
         # Record GA operator distribution
         self.record_GAOperator_distribution()
 
-        # Record snapshot
-        self.record_snapshot()
+        # # Record snapshot
+        # self.record_snapshot()
         return
 
     def record_GAOperator_distribution(self):
@@ -251,12 +258,15 @@ class ForestBorgFolsom:
                 self.GAOperators[key].append(0)
         return
 
-    def check_unchanged(self, lst):
-        if len(lst) > 3:
-            for i in range(3, len(lst)):
-                if lst[i - 3] == lst[i - 2] == lst[i - 1]:
-                    return True
-        return False
+    def check_unchanged(self, arr):
+        if len(arr) < 10:
+            return False
+        return len(set(arr[-10:])) == 1
+        # if len(lst) > 10:
+        #     for i in range(10, len(lst)):
+        #         if lst[i - 10] == lst[i - 9] == lst[i - 8] == lst[i - 7] == lst[i - 6] == lst[i - 5] == lst[i - 4] == lst[i - 3] == lst[i - 2] == lst[i - 1]:
+        #             return True
+        # return False
 
     def mutate_with_feedbackloop(self, offspring):
         # TODO:: This is super hacky and bad programming, must change action handling and operator selection after proof-of-concept
@@ -286,25 +296,28 @@ class ForestBorgFolsom:
         return offspring
 
     def restart(self, current_Archive, gamma, tau):
+        print('triggered restart')
         self.population = np.array([])
         self.population = current_Archive
         new_size = gamma * len(current_Archive)
         # Inject mutated Archive members into the new population
+        restart_counter = 0
         while len(self.population) < new_size:
             # Select a random solution from the Archive
             volunteer = self.rng_revive.choice(current_Archive)
             volunteer = self.mutate_with_feedbackloop(volunteer)
             volunteer.fitness = self.policy_tree_RICE_fitness(volunteer.dna)
-            # # Now try with completely new solutions as that seemed kind of promising in trials
-            # volunteer = self.spawn()
             self.nfe += 1
+
             # Add new solution to population
-            if self.population.size > 0:
-                self.add_to_population(volunteer)
-            else:
+            if (self.population.size == 0) or (restart_counter > 2*new_size):
                 self.population = np.append(self.population, volunteer)
+            else:
+                self.add_to_population(volunteer)
             # Update Archive with new solution
             self.add_to_Archive(volunteer)
+
+            restart_counter += 1
         # Adjust tournament size to account for the new population size
         self.tournament_size = max(2, math.floor(tau * new_size))
         self.number_of_restarts += 1
@@ -477,6 +490,8 @@ class ForestBorgFolsom:
                 elif self.dominates(member.fitness, candidate_solution.fitness):
                     return
                 # return
+            else:
+                epsilon_progress = True
         self.Archive = np.append(self.Archive, candidate_solution)
         if epsilon_progress:
             self.epsilon_progress_counter += 1
@@ -493,23 +508,28 @@ class ForestBorgFolsom:
         # of the population.
 
         members_to_be_randomly_rejected = []
+        extension = None
         for idx, member in enumerate(self.population):
             if self.dominates(offspring.fitness, member.fitness):
-                members_to_be_randomly_rejected.append(idx)
+                members_to_be_randomly_rejected.append(member)
             elif self.dominates(member.fitness, offspring.fitness):
                 return
+            else:
+                extension = True
 
         if members_to_be_randomly_rejected:
             # self.population.pop(self.rng_population.choice(members_to_be_randomly_rejected))
             # self.population.append(offspring)
             self.population = self.population[~np.isin(self.population, self.rng_population.choice(members_to_be_randomly_rejected))]
             self.population = np.append(self.population, offspring)
-        else:
-            kick_out = self.rng_population.choice(len(self.population))
+
+        if extension:
+            kick_out = self.rng_population.choice(self.population)
             # self.population.pop(kick_out)
             # self.population.append(offspring)
             self.population = self.population[~np.isin(self.population, kick_out)]
             self.population = np.append(self.population, offspring)
+
         return
 
     def record_snapshot(self):
