@@ -1,5 +1,6 @@
 import numpy as np
 from POT.tree import PTree
+from folsom import Folsom
 # from RICE_model.IAM_RICE import RICE
 # from folsom import Folsom
 import time
@@ -48,6 +49,9 @@ class Shotgun:
                  save_location=None,
                  title_of_run=None,
                  ):
+
+        self.rng_tree = np.random.default_rng(master_rng.integers(0, 1e9))
+
         self.model = model
         self.metrics = metrics
         self.action_names = action_names
@@ -62,14 +66,27 @@ class Shotgun:
         self.max_nfe = max_nfe
         self.epsilons = epsilons
 
-        self.rng_tree = np.random.default_rng(master_rng.integers(0, 1e9))
+        self.epsilon_progress_counter = 0
+        self.epsilon_progress_tracker = np.array([])
+        self.snapshot_dict = {'nfe': [],
+                              'time': [],
+                              'Archive_solutions': [],
+                              'Archive_trees': []}
+
+
+
+        self.nfe = 0
 
     def run(self):
         # Generate initial random population
         self.population = np.array([self.spawn(heritage='random') for _ in range(self.pop_size)])
         print(f'size pop: {np.size(self.population)}')
+
         # Add epsilon non-dominated and extreme solutions to VIPs
-        self.VIPs
+        self.VIPs = np.array([self.population[0]])
+        for sol in self.population:
+            self.enter_VIPs(sol)
+        print(f'size VIPs: {np.size(self.VIPs)}')
         return
 
     def random_tree(self, terminal_ratio=0.5):
@@ -123,6 +140,26 @@ class Shotgun:
         b = b + large_number
 
         return np.all(a <= b) and np.any(a < b)
+
+    def enter_VIPs(self, candidate_solution):
+        epsilon_progress = False
+        for member in self.VIPs:
+            if self.dominates(candidate_solution.fitness, member.fitness - self.epsilons):
+                # self.Archive.remove(member)
+                self.VIPs = self.VIPs[~np.isin(self.VIPs, member)]
+                epsilon_progress = True
+            elif self.dominates(member.fitness - self.epsilons, candidate_solution.fitness):
+                # Check if they fall in the same box, if so, keep purely dominant solution
+                if self.dominates(candidate_solution.fitness, member.fitness):
+                    # self.Archive.remove(member)
+                    self.VIPS = self.VIPs[~np.isin(self.VIPs, member)]
+                elif self.dominates(member.fitness, candidate_solution.fitness):
+                    return
+                # return
+        self.VIPs = np.append(self.VIPs, candidate_solution)
+        if epsilon_progress:
+            self.epsilon_progress_counter += 1
+        return
 
 
 class Organism:

@@ -315,10 +315,12 @@ if __name__ == '__main__':
 
 
     # -- All figures as subplots ----------
-    file_path = r'/output_data/Folsom_Herman_25000nfe_snapshots.pkl'
+    # file_path = r'/output_data/Folsom_Herman_25000nfe_snapshots.pkl'
+    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_Herman_25000nfe_snapshots.pkl'
     data_H = ProcessResults().Pickle(file_path)
 
-    file_path = r'/output_data/Folsom_ForestBorg_100000nfe_snapshots.pkl'
+    # file_path = r'/output_data/Folsom_ForestBorg_100000nfe_snapshots.pkl'
+    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\TEST_Folsom_ForestBorg_25000nfe_new_add_Archive_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_w_snapshots_snapshots.pkl'
     data_FB = ProcessResults().Pickle(file_path)
 

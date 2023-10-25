@@ -371,25 +371,26 @@ if __name__ == '__main__':
         title_of_run = 'TEST_Folsom_Shotgun'
         start = time.time()
 
-        master_rng = np.random.default_rng(42)  # Master RNG
         model = Folsom('folsom/data/folsom-daily-w2016.csv',
                        sd='1995-10-01', ed='2016-09-30', use_tocs=False, multiobj=True)
+        master_rng = np.random.default_rng(42)  # Master RNG
         snapshots = Shotgun(model=model,
-                master_rng=master_rng,
+                    master_rng=master_rng,
                 metrics=['period_utility', 'damages', 'temp_overshoots'],
                 # Tree variables
-                action_names=['miu', 'sr', 'irstp'],
-                action_bounds=[[2100, 2250], [0.2, 0.5], [0.01, 0.1]],
-                feature_names=['mat', 'net_output', 'year'],
-                feature_bounds=[[780, 1300], [55, 2300], [2005, 2305]],
-                max_depth=4,
-                discrete_actions=False,
-                discrete_features=False,
+                action_names=['Release_Demand', 'Hedge_90', 'Hedge_80',
+                              'Hedge_70', 'Hedge_60', 'Hedge_50', 'Flood_Control'],
+                action_bounds=None,
+                feature_bounds=[[0, 1000], [1, 365], [0, 300]],
+                feature_names=['Storage', 'Day', 'Inflow'],
+                max_depth=5,
+                discrete_actions=True,
+                discrete_features=None,
                 # Optimization variables
                 mutation_prob=0.5,
                 pop_size=100,
                 max_nfe=2000,
-                epsilons=np.array([0.05, 0.05, 0.05]),
+                epsilons=np.array([0.01, 1000, 0.01, 10]),
                 ).run()
         # df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
         pickle.dump(snapshots, open(f'{save_location}/{title_of_run}_snapshots.pkl', 'wb'))
@@ -712,7 +713,7 @@ if __name__ == '__main__':
 
     # optimization_Folsom_Herman(save_location)
 
-    optimization_Folsom_ForestBorg(save_location)
+    # optimization_Folsom_ForestBorg(save_location)
 
-    # optimization_Folsom_Shotgun(save_location)
+    optimization_Folsom_Shotgun(save_location)
 

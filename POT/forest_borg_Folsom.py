@@ -126,10 +126,10 @@ class ForestBorgFolsom:
 
             if self.nfe >= last_snapshot + snapshot_frequency:
                 last_snapshot = self.nfe
-                self.snapshot_dict['nfe'].append(self.nfe)
-                self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
-                self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
-                self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
+                # self.snapshot_dict['nfe'].append(self.nfe)
+                # self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
+                # self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
+                # self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
 
                 intermediate_time = time.time()
                 print(
@@ -236,6 +236,9 @@ class ForestBorgFolsom:
 
         # Record GA operator distribution
         self.record_GAOperator_distribution()
+
+        # Record snapshot
+        self.record_snapshot()
         return
 
     def record_GAOperator_distribution(self):
@@ -305,6 +308,9 @@ class ForestBorgFolsom:
         # Adjust tournament size to account for the new population size
         self.tournament_size = max(2, math.floor(tau * new_size))
         self.number_of_restarts += 1
+
+        # Record snapshot
+        self.record_snapshot()
         return
 
     def tournament(self, k):
@@ -504,6 +510,13 @@ class ForestBorgFolsom:
             # self.population.append(offspring)
             self.population = self.population[~np.isin(self.population, kick_out)]
             self.population = np.append(self.population, offspring)
+        return
+
+    def record_snapshot(self):
+        self.snapshot_dict['nfe'].append(self.nfe)
+        self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
+        self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
+        self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
         return
 
 
