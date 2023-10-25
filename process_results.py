@@ -213,10 +213,13 @@ class ProcessResults:
             hypervolume_metric = np.append(hypervolume_metric, hypervolume(generation, reference_point))
         return hypervolume_metric
 
-    def visualize_generational_metrics(self, series, ax, title='centroid distance', x_label='snapshot', y_label='distance (-)', save=False):
-        x = [x for x in range(len(series))]
+    def visualize_generational_metrics(self, series, x_data=None, ax=None, title='centroid distance', x_label='snapshot', y_label='distance (-)', save=False):
+        if not x_data:
+            x = [x for x in range(len(series))]
+        else:
+            x = x_data
         y = series
-        ax.plot(x, y)
+        ax.scatter(x, y)
         ax.set_title(title)
         ax.set_ylabel(y_label)
         ax.set_xlabel(x_label)
@@ -339,11 +342,11 @@ if __name__ == '__main__':
     reference_point = np.array([10, 500000, 10, -100])
 
     hypervolume_metric_H = ProcessResults().calculate_generational_hypervolume(data_H['best_f'], reference_point)
-    ProcessResults().visualize_generational_metrics(hypervolume_metric_H, ax=axs[1, 0], title='Hypervolume Herman POT', x_label='snapshot',
+    ProcessResults().visualize_generational_metrics(hypervolume_metric_H, x_data=data_H['nfe'], ax=axs[1, 0], title='Hypervolume Herman POT', x_label='snapshot',
                                                    y_label='volume (-)')
     hypervolume_metric_FB = ProcessResults().calculate_generational_hypervolume(data_FB['Archive_solutions'],
                                                                              reference_point)
-    ProcessResults().visualize_generational_metrics(hypervolume_metric_FB, ax=axs[1, 1], title='Hypervolume ForestBorg', x_label='snapshot',
+    ProcessResults().visualize_generational_metrics(hypervolume_metric_FB, x_data=data_FB['nfe'], ax=axs[1, 1], title='Hypervolume ForestBorg', x_label='snapshot',
                                                    y_label='volume (-)')
     # Add a title for the entire plot
     plt.suptitle('Convergence metrics Herman POT and ForestBORG on FOLSOM lake model')
