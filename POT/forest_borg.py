@@ -462,6 +462,7 @@ class ForestBorg:
                     self.Archive = self.Archive[~np.isin(self.Archive, member)]
                 elif self.dominates(member.fitness, candidate_solution.fitness):
                     return
+
         self.Archive = np.append(self.Archive, candidate_solution)
         if epsilon_progress:
             self.epsilon_progress_counter += 1

@@ -196,9 +196,9 @@ class ForestBorgFolsom:
 
     def iterate(self, i):
         self.epsilon_progress_counter = 0
-        print(f'population: {len(self.population)}')
-        print(f'Archive: {len(self.Archive)}')
-        print(f'gamma: {len(self.population) / len(self.Archive)}')
+        # print(f'population: {len(self.population)}')
+        # print(f'Archive: {len(self.Archive)}')
+        # print(f'gamma: {len(self.population) / len(self.Archive)}')
         if i%10 == 0:
             # Check gamma (the population to Archive ratio)
             gamma = len(self.population) / len(self.Archive)
@@ -477,22 +477,29 @@ class ForestBorgFolsom:
 
     def add_to_Archive(self, candidate_solution):
         epsilon_progress = False
-        for member in self.Archive:
+        for idx, member in enumerate(self.Archive):
             if self.dominates(candidate_solution.fitness, member.fitness - self.epsilons):
                 # self.Archive.remove(member)
-                self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                # self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                self.Archive = np.delete(self.Archive, idx)
                 epsilon_progress = True
             elif self.dominates(member.fitness - self.epsilons, candidate_solution.fitness):
                 # Check if they fall in the same box, if so, keep purely dominant solution
                 if self.dominates(candidate_solution.fitness, member.fitness):
                     # self.Archive.remove(member)
-                    self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                    # self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                    self.Archive = np.delete(self.Archive, idx)
                 elif self.dominates(member.fitness, candidate_solution.fitness):
                     return
                 # return
+            elif np.array_equal(candidate_solution.fitness, member.fitness):
+                # If the solution values are identical
+                return
             else:
+                # If the new solution extends the Archive
                 epsilon_progress = True
         self.Archive = np.append(self.Archive, candidate_solution)
+        # self.Archive = np.vstack((self.Archive, candidate_solution))
         if epsilon_progress:
             self.epsilon_progress_counter += 1
         return
@@ -511,24 +518,42 @@ class ForestBorgFolsom:
         extension = None
         for idx, member in enumerate(self.population):
             if self.dominates(offspring.fitness, member.fitness):
-                members_to_be_randomly_rejected.append(member)
+                members_to_be_randomly_rejected.append(idx)
             elif self.dominates(member.fitness, offspring.fitness):
                 return
             else:
                 extension = True
 
         if members_to_be_randomly_rejected:
-            # self.population.pop(self.rng_population.choice(members_to_be_randomly_rejected))
-            # self.population.append(offspring)
-            self.population = self.population[~np.isin(self.population, self.rng_population.choice(members_to_be_randomly_rejected))]
-            self.population = np.append(self.population, offspring)
+            # Randomly select an index from members_to_be_randomly_rejected
+            idx = self.rng_population.choice(members_to_be_randomly_rejected)
+            self.population[idx] = offspring
+            # ------------------------
+            # # self.population.pop(self.rng_population.choice(members_to_be_randomly_rejected))
+            # # self.population.append(offspring)
+            # self.population = self.population[~np.isin(self.population, self.rng_population.choice(members_to_be_randomly_rejected))]
+            # self.population = np.append(self.population, offspring)
+            if not len(self.population) == 100:
+                print('Population size rejected')
 
         if extension:
-            kick_out = self.rng_population.choice(self.population)
-            # self.population.pop(kick_out)
-            # self.population.append(offspring)
-            self.population = self.population[~np.isin(self.population, kick_out)]
-            self.population = np.append(self.population, offspring)
+            # Randomly select an index from population
+            idx = self.rng_population.integers(0, len(self.population) - 1)
+            self.population[idx] = offspring
+            # -----------
+            # kick_out = self.rng_population.choice(self.population)
+            # # self.population.pop(kick_out)
+            # # self.population.append(offspring)
+            # self.population = self.population[~np.isin(self.population, kick_out)]
+            # self.population = np.append(self.population, offspring)
+            if not len(self.population) == 100:
+                print('Population size extension')
+                # print(kick_out)
+
+        # if not len(self.population) == 100:
+            # print('Population size DEVIATES')
+            # print([elem.fitness for elem in self.population])
+            # print(offspring.fitness)
 
         return
 
