@@ -76,7 +76,8 @@ class ForestBorg:
         self.snapshot_dict = {'nfe': [],
                               'time': [],
                               'Archive_solutions': [],
-                              'Archive_trees': []}
+                              'Archive_trees': [],
+                              'epsilon_progress': []}
 
         self.number_of_restarts = 0
 
@@ -131,25 +132,6 @@ class ForestBorg:
                     f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
                     end='', flush=True)
 
-            # if log_counter % 100 == 0:
-            #     # Archive snapshots
-            #     data_dict = {}
-            #     for idx, item in enumerate(self.Archive):
-            #         data_dict[f'{self.nfe}_{idx}_snapshot'] = [item.fitness[0], item.fitness[1], item.fitness[2],
-            #                                                  str(item.dna)]
-            #     df = pd.DataFrame.from_dict(data_dict, orient='index')
-            #
-            #     conn = sqlite3.connect(self.database)
-            #     df.to_sql(name=f'archive_snapshots_{self.file_name}', con=conn, if_exists='append')
-            #     conn.commit()
-            #     conn.close()
-            #
-            # if log_counter % 50 == 0:
-            #     intermediate_time = time.time()
-            #     print(
-            #         f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
-            #         end='', flush=True)
-
         # -- Create visualizations of the run -------------------
         self.end_time = time.time()
 
@@ -179,7 +161,7 @@ class ForestBorg:
         MOEAVisualizations(self.save_location).visualize_operator_distribution(self.GAOperators,
                                                            title=f'operator_distribution_{self.file_name}',
                                                            x_label='Generation', y_label='Count', save=True)
-        return df
+        return self.snapshot_dict
 
     def iterate(self, i):
         if i%5000 == 0:
@@ -190,10 +172,11 @@ class ForestBorg:
             # Officially in the borg paper I believe it is triggered if the latest epsilon tracker value is the same as the one of that before
 
             if self.check_unchanged(self.epsilon_progress_tracker):
+                print('restart because of epsilon')
                 self.restart(self.Archive, self.gamma, self.tau)
             # Check if gamma value warrants a restart (see Figure 2 in paper borg)
-            elif (gamma > 1.25 * self.gamma) or (gamma < 0.75 * self.gamma):
-                # self.revive_search(gamma)
+            elif (gamma > 1.50 * self.gamma) or (gamma < 0.50 * self.gamma):
+                print('restart because of gamma')
                 self.restart(self.Archive, self.gamma, self.tau)
 
         # Selection of recombination operator
@@ -210,7 +193,7 @@ class ForestBorg:
         offspring.dna = GAOperators.crossover_subtree(self, parents[0].dna, parents[1].dna)[0]
         # Let it mutate (in-built chance of mutation)
         offspring = self.mutate_with_feedbackloop(offspring)
-        offspring.fitness = self.policy_tree_RICE_fitness(offspring.dna)
+        offspring.fitness = self.policy_tree_model_fitness(offspring.dna)
         self.nfe += 1
 
         # Add to population
@@ -236,12 +219,10 @@ class ForestBorg:
                 self.GAOperators[key].append(0)
         return
 
-    def check_unchanged(self, lst):
-        if len(lst) > 3:
-            for i in range(3, len(lst)):
-                if lst[i - 3] == lst[i - 2] == lst[i - 1]:
-                    return True
-        return False
+    def check_unchanged(self, arr):
+        if len(arr) < 10:
+            return False
+        return len(set(arr[-10:])) == 1
 
     def mutate_with_feedbackloop(self, offspring):
         # TODO:: This is super hacky and bad programming, must change action handling and operator selection after proof-of-concept
@@ -271,28 +252,42 @@ class ForestBorg:
         return offspring
 
     def restart(self, current_Archive, gamma, tau):
+        print('triggered restart')
         self.population = np.array([])
         self.population = current_Archive
         new_size = gamma * len(current_Archive)
         # Inject mutated Archive members into the new population
+        restart_counter = 0
         while len(self.population) < new_size:
             # Select a random solution from the Archive
             volunteer = self.rng_revive.choice(current_Archive)
             volunteer = self.mutate_with_feedbackloop(volunteer)
-            volunteer.fitness = self.policy_tree_RICE_fitness(volunteer.dna)
-            # # Now try with completely new solutions as that seemed kind of promising in trials
-            # volunteer = self.spawn()
+            volunteer.fitness = self.policy_tree_model_fitness(volunteer.dna)
             self.nfe += 1
-            # Add new solution to population
-            if self.population.size > 0:
-                self.add_to_population(volunteer)
-            else:
-                self.population = np.append(self.population, volunteer)
+
+            # # Add new solution to population
+            # if (self.population.size == 0):  # or (restart_counter > 2*new_size):
+            #     self.population = np.append(self.population, volunteer)
+            # else:
+            #     self.add_to_population(volunteer)
+            self.population = np.append(self.population, volunteer)
+
             # Update Archive with new solution
             self.add_to_Archive(volunteer)
+
+            if restart_counter % 100 == 0:
+                self.record_snapshot()
+
+            if self.nfe > self.max_nfe:
+                return
+
+            restart_counter += 1
         # Adjust tournament size to account for the new population size
         self.tournament_size = max(2, math.floor(tau * new_size))
         self.number_of_restarts += 1
+
+        # Record snapshot
+        self.record_snapshot()
         return
 
     def tournament(self, k):
@@ -315,7 +310,7 @@ class ForestBorg:
     def spawn(self):
         organism = Organism()
         organism.dna = self.random_tree()
-        organism.fitness = self.policy_tree_RICE_fitness(organism.dna)
+        organism.fitness = self.policy_tree_model_fitness(organism.dna)
         return organism
 
     def random_tree(self, terminal_ratio=0.5):
@@ -350,7 +345,7 @@ class ForestBorg:
         T.prune()
         return T
 
-    def policy_tree_RICE_fitness(self, T):
+    def policy_tree_model_fitness(self, T):
         metrics = np.array(self.model.POT_control(T))
         return metrics
 
@@ -367,42 +362,6 @@ class ForestBorg:
         P1.build()
         P2.build()
         return (P1, P2)
-
-    # def mutate(self, P, mutate_actions=True):
-        # P = copy.deepcopy(P)
-        #
-        # for item in P.L:
-        #     if self.rng_mutate.random() < self.mutation_prob:
-        #         if item.is_feature:
-        #             low, high = self.feature_bounds[item.index]
-        #             if item.is_discrete:
-        #                 item.threshold = self.rng_mutate.integers(low, high + 1)
-        #             else:
-        #                 item.threshold = self.bounded_gaussian(
-        #                     item.threshold, [low, high])
-        #         elif mutate_actions:
-        #             if self.discrete_actions:
-        #                 item.value = str(self.rng_mutate.choice(self.action_names))
-        #             else:
-        #                 # print(item)
-        #                 # print(self.action_bounds)
-        #                 # print(item.value)
-        #                 # item.value = self.bounded_gaussian(
-        #                 #     item.value, self.action_bounds)
-        #
-        #                 # --------
-        #                 # a = np.random.choice(len(self.action_names))  # SD changed
-        #                 # action_name = self.action_names[a]
-        #                 # action_value = np.random.uniform(*self.action_bounds[a])
-        #                 # action_input = f'{action_name}_{action_value}'
-        #                 # # print(action_input)
-        #                 # item.value = action_input
-        #
-        #                 # action_input = f'miu_{self.rng.integers(*self.action_bounds[0])}|sr_{self.rng.uniform(*self.action_bounds[1])}|irstp_{self.rng.uniform(*self.action_bounds[2])}'
-        #                 action_input = f'miu_{self.rng_mutate.integers(*self.action_bounds[0])}|sr_{round(self.rng_mutate.uniform(*self.action_bounds[1]),3 )}|irstp_{round(self.rng_mutate.uniform(*self.action_bounds[2]), 3)}'
-        #                 item.value = action_input
-        #
-        # return P
 
     def bounded_gaussian(self, x, bounds):
         # do mutation in normalized [0,1] to avoid sigma scaling issues
@@ -449,23 +408,37 @@ class ForestBorg:
         return np.all(a == b)
 
     def add_to_Archive(self, candidate_solution):
+        if np.any([np.array_equal(candidate_solution.fitness, arr.fitness) for arr in self.Archive]):
+            return
+
         epsilon_progress = False
-        for member in self.Archive:
+        delete_from_Archive = []
+        for idx, member in enumerate(self.Archive):
             if self.dominates(candidate_solution.fitness, member.fitness - self.epsilons):
                 # self.Archive.remove(member)
-                self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                # self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                # self.Archive = np.delete(self.Archive, idx)
+                delete_from_Archive.append(idx)
                 epsilon_progress = True
             elif self.dominates(member.fitness - self.epsilons, candidate_solution.fitness):
                 # Check if they fall in the same box, if so, keep purely dominant solution
                 if self.dominates(candidate_solution.fitness, member.fitness):
                     # self.Archive.remove(member)
-                    self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                    # self.Archive = self.Archive[~np.isin(self.Archive, member)]
+                    # self.Archive = np.delete(self.Archive, idx)
+                    delete_from_Archive.append(idx)
                 elif self.dominates(member.fitness, candidate_solution.fitness):
                     return
-
+            else:
+                # If the new solution extends the Archive
+                epsilon_progress = True
+        # Delete from Archive
+        self.Archive = np.delete(self.Archive, delete_from_Archive)
         self.Archive = np.append(self.Archive, candidate_solution)
+
         if epsilon_progress:
             self.epsilon_progress_counter += 1
+
         return
 
     def add_to_population(self, offspring):
@@ -479,23 +452,25 @@ class ForestBorg:
         # of the population.
 
         members_to_be_randomly_rejected = []
+        extension = None
         for idx, member in enumerate(self.population):
             if self.dominates(offspring.fitness, member.fitness):
                 members_to_be_randomly_rejected.append(idx)
             elif self.dominates(member.fitness, offspring.fitness):
                 return
+            else:
+                extension = True
 
         if members_to_be_randomly_rejected:
-            # self.population.pop(self.rng_population.choice(members_to_be_randomly_rejected))
-            # self.population.append(offspring)
-            self.population = self.population[~np.isin(self.population, self.rng_population.choice(members_to_be_randomly_rejected))]
-            self.population = np.append(self.population, offspring)
-        else:
-            kick_out = self.rng_population.choice(len(self.population))
-            # self.population.pop(kick_out)
-            # self.population.append(offspring)
-            self.population = self.population[~np.isin(self.population, kick_out)]
-            self.population = np.append(self.population, offspring)
+            # Randomly select an index from members_to_be_randomly_rejected
+            idx = self.rng_population.choice(members_to_be_randomly_rejected)
+            self.population[idx] = offspring
+
+        if extension:
+            # Randomly select an index from population
+            idx = self.rng_population.integers(0, len(self.population) - 1)
+            self.population[idx] = offspring
+
         return
 
     def record_snapshot(self):
@@ -503,6 +478,7 @@ class ForestBorg:
         self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
         self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
         self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
+        self.snapshot_dict['epsilon_progress'] = self.epsilon_progress_tracker
         return
 
 

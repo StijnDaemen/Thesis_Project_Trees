@@ -81,7 +81,8 @@ class ForestBorgFolsom:
         self.snapshot_dict = {'nfe': [],
                               'time': [],
                               'Archive_solutions': [],
-                              'Archive_trees': []}
+                              'Archive_trees': [],
+                              'epsilon_progress': []}
 
         self.number_of_restarts = 0
 
@@ -134,7 +135,7 @@ class ForestBorgFolsom:
 
                 intermediate_time = time.time()
                 print(
-                    f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_tracker[-1]} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
+                    f'\rnfe: {self.nfe}/{self.max_nfe} -- cumulative epsilon progress: {self.epsilon_progress_tracker[-1]} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
                     end='', flush=True)
 
             # log_counter += 1
@@ -196,10 +197,10 @@ class ForestBorgFolsom:
 
     def iterate(self, i):
         self.epsilon_progress_counter = 0
-        # print(f'population: {len(self.population)}')
-        # print(f'Archive: {len(self.Archive)}')
-        # print(f'gamma: {len(self.population) / len(self.Archive)}')
-        if i%10 == 0:
+        print(f'population: {len(self.population)}')
+        print(f'Archive: {len(self.Archive)}')
+        print(f'gamma: {len(self.population) / len(self.Archive)}')
+        if i%1000 == 0:
             # Check gamma (the population to Archive ratio)
             gamma = len(self.population) / len(self.Archive)
 
@@ -209,11 +210,11 @@ class ForestBorgFolsom:
             if self.check_unchanged(self.epsilon_progress_tracker):
                 print('through epsilon')
                 self.restart(self.Archive, self.gamma, self.tau)
-            # # Check if gamma value warrants a restart (see Figure 2 in paper borg)
-            # elif (gamma > 1.5 * self.gamma) or (gamma < 0.5 * self.gamma):
-            #     # self.revive_search(gamma)
-            #     print('through gamma')
-            #     self.restart(self.Archive, self.gamma, self.tau)
+            # Check if gamma value warrants a restart (see Figure 2 in paper borg)
+            elif (gamma > 1.5 * self.gamma) or (gamma < 0.5 * self.gamma):
+                # self.revive_search(gamma)
+                print('through gamma')
+                self.restart(self.Archive, self.gamma, self.tau)
 
         # Selection of recombination operator
         parents_required = 2
@@ -310,12 +311,18 @@ class ForestBorgFolsom:
             self.nfe += 1
 
             # Add new solution to population
-            if (self.population.size == 0) or (restart_counter > 2*new_size):
+            if (self.population.size == 0):# or (restart_counter > 2*new_size):
                 self.population = np.append(self.population, volunteer)
             else:
                 self.add_to_population(volunteer)
             # Update Archive with new solution
             self.add_to_Archive(volunteer)
+
+            if restart_counter % 100 == 0:
+                self.record_snapshot()
+
+            if self.nfe > self.max_nfe:
+                return
 
             restart_counter += 1
         # Adjust tournament size to account for the new population size
@@ -476,32 +483,53 @@ class ForestBorgFolsom:
         return np.all(a == b)
 
     def add_to_Archive(self, candidate_solution):
+        if np.any([np.array_equal(candidate_solution.fitness, arr.fitness) for arr in self.Archive]):
+            return
+
         epsilon_progress = False
+        delete_from_Archive = []
         for idx, member in enumerate(self.Archive):
             if self.dominates(candidate_solution.fitness, member.fitness - self.epsilons):
                 # self.Archive.remove(member)
                 # self.Archive = self.Archive[~np.isin(self.Archive, member)]
-                self.Archive = np.delete(self.Archive, idx)
+                # self.Archive = np.delete(self.Archive, idx)
+                delete_from_Archive.append(idx)
                 epsilon_progress = True
             elif self.dominates(member.fitness - self.epsilons, candidate_solution.fitness):
                 # Check if they fall in the same box, if so, keep purely dominant solution
                 if self.dominates(candidate_solution.fitness, member.fitness):
                     # self.Archive.remove(member)
                     # self.Archive = self.Archive[~np.isin(self.Archive, member)]
-                    self.Archive = np.delete(self.Archive, idx)
+                    # self.Archive = np.delete(self.Archive, idx)
+                    delete_from_Archive.append(idx)
                 elif self.dominates(member.fitness, candidate_solution.fitness):
                     return
                 # return
-            elif np.array_equal(candidate_solution.fitness, member.fitness):
-                # If the solution values are identical
-                return
+            # elif np.array_equal(candidate_solution.fitness, member.fitness):
+            #     # If the solution values are identical
+            #     print('identical solution found')
+            #     return
             else:
                 # If the new solution extends the Archive
                 epsilon_progress = True
+        # Delete from Archive
+        self.Archive = np.delete(self.Archive, delete_from_Archive)
         self.Archive = np.append(self.Archive, candidate_solution)
-        # self.Archive = np.vstack((self.Archive, candidate_solution))
+
         if epsilon_progress:
             self.epsilon_progress_counter += 1
+
+        def get_unique_array(gen):
+            # Convert the list of arrays to a 2D array
+            arr_2d = np.vstack(gen)
+            # Find the unique rows
+            unique_rows = np.unique(arr_2d, axis=0)
+            return unique_rows
+
+        unique_Archive = get_unique_array([elem.fitness for elem in self.Archive])
+        if not len(self.Archive) == len(unique_Archive):
+            print(f' UNunique Archive!: diff = {len(self.Archive) - len(unique_Archive)}')
+
         return
 
     def add_to_population(self, offspring):
@@ -562,6 +590,7 @@ class ForestBorgFolsom:
         self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
         self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
         self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
+        self.snapshot_dict['epsilon_progress'] = self.epsilon_progress_tracker
         return
 
 

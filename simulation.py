@@ -77,7 +77,7 @@ if __name__ == '__main__':
         return print(f'Total elapsed time: {(end - start)/60} minutes.')
 
     def basic_run_RICE_with_scenarios(years_10, regions, save_location):
-        title_of_run = ''
+        title_of_run = 'TEST_SSP1_1_scenario'
         start = time.time()
         levers = {'mu_target': 2135,
                   'sr': 0.248,
@@ -87,8 +87,9 @@ if __name__ == '__main__':
                     'climate_sensitivity_distribution': 'lognormal',          # 'log', 'lognormal', 'Cauchy'
                     'elasticity_climate_impact': 0,                          # -1, 0, 1
                     'price_backstop_tech': 1.260,                             # [1.260, 1.470, 1.680, 1.890]
-                    'negative_emissions_possible': 'no'}                     # 'yes' or 'no'
-        RICE(years_10, regions, scenario=scenario1, levers=levers, save_location=save_location, file_name=title_of_run).run(write_to_excel=False, write_to_sqlite=False)
+                    'negative_emissions_possible': 'no',                    # 'yes' or 'no'
+                    't2xco2_index': 800, }                                  # 0, 999
+        RICE(years_10, regions, scenario=scenario1, levers=levers, save_location=save_location, file_name=title_of_run).run(write_to_excel=True, write_to_sqlite=False)
 
         # scenario2 = {'SSP_scenario': 2,  # 1, 2, 3, 4, 5
         #             'fosslim': 9790,  # range(4000, 13650), depending on SSP scenario
@@ -323,7 +324,7 @@ if __name__ == '__main__':
         return
 
     def optimization_Folsom_ForestBorg(save_location):
-        title_of_run = 'TEST_Folsom_ForestBorg_25000nfe'
+        title_of_run = 'TEST_Folsom_ForestBorg_10000nfe'
         start = time.time()
 
         master_rng = np.random.default_rng(42)  # Master RNG
@@ -342,7 +343,7 @@ if __name__ == '__main__':
                                           discrete_features=None,
                                           # Optimization variables
                                           mutation_prob=0.5,
-                                          max_nfe=25000,
+                                          max_nfe=10000,
                                           epsilons=[0.01, 1000, 0.01, 10],
                                           gamma=2,
                                           tau=0.02,
@@ -399,11 +400,12 @@ if __name__ == '__main__':
 
     # POLICY TREE OPTIMIZATION WITH RICE ---------------
     def optimization_RICE_POT_Herman(years_10, regions, save_location):
-        title_of_run = ''
+        title_of_run = 'HermanRICE_100000nfe_random_other_levers'
         start = time.time()
         # input_path = os.path.join(package_directory)
         # model = RICE(years_10, regions, database_POT=input_path+'/ptreeopt/output_data/POT_Experiments.db', table_name_POT='indicator_groupsize_3_bin_tournament_1')
-        model = RICE(years_10, regions, save_location=save_location, file_name=title_of_run)
+        # model = RICE(years_10, regions, save_location=save_location, file_name=title_of_run)
+        model = RICE(years_10, regions)
         algorithm = PTreeOpt(model.POT_control_Herman,
                              # feature_bounds=[[0.8, 2.8], [700, 900], [2005, 2305]],
                              # feature_names=['temp_atm', 'mat', 'year'],
@@ -413,18 +415,32 @@ if __name__ == '__main__':
                              # feature_names=['temp_atm'],
                              feature_bounds=[[780, 1300], [55, 2300], [2005, 2305]],
                              feature_names=['mat', 'net_output', 'year'],
-                             discrete_actions=False,
+                             discrete_features=None,
+                             discrete_actions=True,
                              # action_names=['miu_2100_sr_low', 'miu_2125_sr_low', 'miu_2150_sr_low',
                              #               'miu_2100_sr_high', 'miu_2125_sr_high', 'miu_2150_sr_high'],
                              # action_names=['miu_2100_sr_low', 'miu_2150_sr_high'],
                              # action_names=['miu_2100_sr_low', 'miu_2125_sr_low', 'miu_2150_sr_low'],
                              # action_names=['miu_2100', 'miu_2150', 'miu_2200', 'miu_2125', 'sr_02', 'sr_03', 'sr_04', 'sr_05'],
-                             action_names=['miu', 'sr', 'irstp'],
-                             action_bounds=[[2065, 2305], [0.1, 0.5], [0.001, 0.015]],
+                             action_names=['miu_2065',
+                                           'miu_2100',
+                                           'miu_2180',
+                                           'miu_2250',
+                                           'miu_2305',
+                                            'sr_01',
+                                           'sr_02',
+                                           'sr_03',
+                                           'sr_04',
+                                           'sr_05',
+                                           'irstp_0005',
+                                           'irstp_0015',
+                                           'irstp_0025'],
+                             # action_bounds=[[2065, 2305], [0.1, 0.5], [0.01, 0.1]],
                              mu=20,  # number of parents per generation, 20
                              cx_prob=0.70,  # crossover probability
                              population_size=100,  # 100
-                             max_depth=4,
+                             max_depth=5,
+                             epsilons=[0.05, 0.05, 0.05],
                              multiobj=True
                              )
 
@@ -432,21 +448,22 @@ if __name__ == '__main__':
                             format='[%(processName)s/%(levelname)s:%(filename)s:%(funcName)s] %(message)s')
 
         # With only 1000 function evaluations this will not be very good
-        best_solution, best_score, snapshots = algorithm.run(max_nfe=10000,
+        best_solution, best_score, snapshots = algorithm.run(max_nfe=100000,
                                                              log_frequency=100,
                                                              snapshot_frequency=100)
-        print(best_solution)
-        print(best_score)
-        print(snapshots)
+        # print(best_solution)
+        # print(best_score)
+        # print(snapshots)
+        #
+        # ## View POT data ---------------------------------------------------------------
+        # # df = view_sqlite_database(database=input_path + '/ptreeopt/output_data/POT_Experiments.db',
+        # #                           table_name='indicator_groupsize_3_bin_tournament_1')
+        # df = view_sqlite_database(database=save_location + '/Experiments.db', table_name=title_of_run)
+        # print(df.head())
+        # print(df.info())
+        # df.to_excel(f'{save_location}/{title_of_run}.xlsx')
 
-        ## View POT data ---------------------------------------------------------------
-        # df = view_sqlite_database(database=input_path + '/ptreeopt/output_data/POT_Experiments.db',
-        #                           table_name='indicator_groupsize_3_bin_tournament_1')
-        df = view_sqlite_database(database=save_location + '/Experiments.db', table_name=title_of_run)
-        print(df.head())
-        print(df.info())
-        df.to_excel(f'{save_location}/{title_of_run}.xlsx')
-
+        pickle.dump(snapshots, open(f'{save_location}/{title_of_run}_snapshots.pkl', 'wb'))
         end = time.time()
         return print(f'Total elapsed time: {(end - start)/60} minutes.')
 
@@ -671,34 +688,36 @@ if __name__ == '__main__':
 
     def optimization_RICE_POT_ForestBorg(years_10, regions, save_location):
         # title_of_run = 'ForestBORG_500000nfe_tree_depth_4_population_100_mat_net_output_year_continuous_period_utility_damages_tempovershoots'
-        title_of_run = 'TESTforestborg'
+        title_of_run = 'ForestborgRICE_100000nfe'
         start = time.time()
 
         model = RICE(years_10, regions)
         master_rng = np.random.default_rng(42)  # Master RNG
-        df_optimized_metrics = ForestBorg(pop_size=100, master_rng=master_rng,
+        snapshots = ForestBorg(pop_size=100, master_rng=master_rng,
                                           model=model,
                                           metrics=['period_utility', 'damages', 'temp_overshoots'],
                                           # Tree variables
                                           action_names=['miu', 'sr', 'irstp'],
-                                          action_bounds=[[2100, 2250], [0.2, 0.5], [0.01, 0.1]],
+                                          action_bounds=[[2065, 2305], [0.1, 0.5], [0.01, 0.1]],
                                           feature_names=['mat', 'net_output', 'year'],
                                           feature_bounds=[[780, 1300], [55, 2300], [2005, 2305]],
-                                          max_depth=4,
+                                          max_depth=5,
                                           discrete_actions=False,
                                           discrete_features=False,
                                           # Optimization variables
                                           mutation_prob=0.5,
-                                          max_nfe=1000,
+                                          max_nfe=100000,
                                           epsilons=np.array([0.05, 0.05, 0.05]),
-                                          gamma=4,
+                                          gamma=2,
                                           tau=0.02,
                                           save_location=save_location,
                                           title_of_run=title_of_run,
                                           ).run()
-        df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
+        pickle.dump(snapshots, open(f'{save_location}/{title_of_run}_snapshots.pkl', 'wb'))
         end = time.time()
         return print(f'Total elapsed time: {(end - start) / 60} minutes.')
+
+
     # basic_run_RICE(years_10, regions, save_location)
 
     # optimization_RICE_POT_Borg(years_10, regions, save_location)
@@ -709,11 +728,14 @@ if __name__ == '__main__':
 
     # connect_to_EMA(years_10, regions, save_location)
 
-    # optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
+    optimization_RICE_POT_Herman(years_10, regions, save_location)
+
+    optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
 
     # optimization_Folsom_Herman(save_location)
 
-    optimization_Folsom_ForestBorg(save_location)
+    # optimization_Folsom_ForestBorg(save_location)
 
     # optimization_Folsom_Shotgun(save_location)
 
+    # basic_run_RICE_with_scenarios(years_10, regions, save_location)

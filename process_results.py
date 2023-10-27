@@ -324,79 +324,147 @@ if __name__ == '__main__':
     data_H = ProcessResults().Pickle(file_path)
 
     # file_path = r'/output_data/Folsom_ForestBorg_100000nfe_snapshots.pkl'
-    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_100000nfe_new_add_Archive_add_population_no_gamma_restart_more_snapshots_snapshots.pkl'
+    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_numpy_operators_full_restart_and_restart_escape_latch_fixed_Archive_duplicates_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_100000nfe_new_numpy_operators_full_restart_and_restart_escape_latch_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_50000nfe_new_numpy_operators_no_restart_mech_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\TEST_Folsom_ForestBorg_10000nfe_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_numpy_operators_no_gamma_restart_mech_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_100000nfe_new_add_Archive_add_population_no_gamma_restart_more_snapshots_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_add_Archive_add_population_no_gamma_restart_more_snapshots_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_add_Archive_no_restart_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_add_Archive_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_w_snapshots_snapshots.pkl'
     data_FB = ProcessResults().Pickle(file_path)
 
-    print('loaded')
-    print(data_FB.keys())
-    print(len(data_FB['Archive_solutions']))
-    print(data_FB['nfe'])
-
-    gen_0 = data_FB['Archive_solutions'][0]
-    gen_1 = data_FB['Archive_solutions'][1]
-
-    print(gen_0)
-    print(gen_1)
-
-    print(f'size gen_0: {len(gen_0)}')
-    print(f'size gen_1: {len(gen_1)}')
-
+    # print('loaded')
+    # print(data_FB.keys())
+    # print(len(data_FB['Archive_solutions']))
+    # print(data_FB['nfe'])
+    #
+    # gen_0 = data_FB['Archive_solutions'][0]
+    # gen_1 = data_FB['Archive_solutions'][1]
+    #
+    # print(gen_0)
+    # print(gen_1)
+    #
+    # print(f'size gen_0: {len(gen_0)}')
+    # print(f'size gen_1: {len(gen_1)}')
+    #
     def get_unique_array(gen):
         # Convert the list of arrays to a 2D array
         arr_2d = np.vstack(gen)
         # Find the unique rows
         unique_rows = np.unique(arr_2d, axis=0)
         return unique_rows
+    #
+    # gen_0 = get_unique_array(gen_0)
+    # print(f'size gen_0: {len(gen_0)}')
+    #
+    # gen_1 = get_unique_array(gen_1)
+    # print(f'size gen_1: {len(gen_1)}')
+    #
+    #
+    # def check_not_present(list_of_arrays, d_array):
+    #     # Iterate through the list and check each array
+    #     for arr in list_of_arrays:
+    #         if np.array_equal(arr, d_array):
+    #             return False
+    #     return True
+    #
+    # new_sol = []#np.array([])
+    # for sol in gen_1:
+    #     if check_not_present(gen_0, sol):
+    #         # new_sol = np.append(new_sol, sol)
+    #         new_sol.append(sol)
+    #
+    # print(new_sol)
+    # print(f'size new_sol: {len(new_sol)}')
+    #
+    # data_FB['unique_Archive_solutions'] = []
+    # for gen in data_FB['Archive_solutions']:
+    #     if not len(gen) == len(get_unique_array(gen)):
+    #         print(len(gen))
+    #         print(len(get_unique_array(gen)))
+    #         print(f'gen {gen} has duplicates')
 
-    gen_0 = get_unique_array(gen_0)
-    print(f'size gen_0: {len(gen_0)}')
+    # print('before check')
+    # for gen in data_FB['Archive_solutions']:
+    #     gen_duplicates = 0
+    #     for sol in gen:
+    #         if np.any(np.array_equal(sol, x) for x in gen):
+    #             gen_duplicates += 1
+    #     if not len(gen) == gen_duplicates:
+    #         print('duplicate found')
+    #
+    # print('after check')
+    #
+    # print('before check')
+    # for gen in data_H['best_f']:
+    #     gen_duplicates = 0
+    #     for sol in gen:
+    #         if np.any(np.array_equal(sol, x) for x in gen):
+    #             gen_duplicates += 1
+    #     if not len(gen) == gen_duplicates:
+    #         print('duplicate found')
+    #
+    # print('after check')
 
-    gen_1 = get_unique_array(gen_1)
-    print(f'size gen_1: {len(gen_1)}')
+    best_H = data_H['best_f'][-1]
+    best_FB = data_FB['Archive_solutions'][-1]
 
+    print(len(best_H))
+    print(len(best_FB))
 
-    def check_not_present(list_of_arrays, d_array):
-        # Iterate through the list and check each array
-        for arr in list_of_arrays:
-            if np.array_equal(arr, d_array):
-                return False
-        return True
+    H_dominates_FB = []
+    for sol_H in best_H:
+        for sol_FB in best_FB:
+            if ProcessResults().dominates(sol_H, sol_FB):
+                H_dominates_FB.append(sol_H)
+    # print(H_dominates_FB)
+    print(len(H_dominates_FB))
 
-    new_sol = []#np.array([])
-    for sol in gen_1:
-        if check_not_present(gen_0, sol):
-            # new_sol = np.append(new_sol, sol)
-            new_sol.append(sol)
+    unique_dom = np.unique(H_dominates_FB, axis=0)
+    print(len(unique_dom))
+    print(unique_dom)
 
-    print(new_sol)
-    print(f'size new_sol: {len(new_sol)}')
+    FB_dominates_H = []
+    for sol_FB in best_FB:
+        for sol_H in best_H:
+            if ProcessResults().dominates(sol_FB, sol_H):
+                FB_dominates_H.append(sol_FB)
+    # print(H_dominates_FB)
+    print(len(FB_dominates_H))
 
-    data_FB['unique_Archive_solutions'] = []
-    for gen in data_FB['Archive_solutions']:
-        data_FB['unique_Archive_solutions'].append(get_unique_array(gen))
+    unique_dom = np.unique(FB_dominates_H, axis=0)
+    print(len(unique_dom))
+    print(unique_dom)
 
-    size_diff = []
-    nr_new_sol = []
-    for idx in range(len(data_FB['unique_Archive_solutions'])-1):
-        print(f'size gen_{idx}: {len(data_FB["unique_Archive_solutions"][idx])}')
-        print(f'size gen_{idx+1}: {len(data_FB["unique_Archive_solutions"][idx+1])}')
-        new_sol = []  # np.array([])
-        for sol in data_FB["unique_Archive_solutions"][idx+1]:
-            if check_not_present(data_FB["unique_Archive_solutions"][idx], sol):
-                # new_sol = np.append(new_sol, sol)
-                new_sol.append(sol)
-        print(f'size new_sol: {len(new_sol)}')
-        print('-----------------------------------------------------')
-        size_diff.append(len(data_FB["unique_Archive_solutions"][idx+1])-len(data_FB["unique_Archive_solutions"][idx]))
-        nr_new_sol.append(len(new_sol))
+    #
+    # size_diff = []
+    # nr_new_sol = []
+    # for idx in range(len(data_FB['unique_Archive_solutions'])-1):
+    #     print(f'size gen_{idx}: {len(data_FB["unique_Archive_solutions"][idx])}')
+    #     print(f'size gen_{idx+1}: {len(data_FB["unique_Archive_solutions"][idx+1])}')
+    #     new_sol = []  # np.array([])
+    #     for sol in data_FB["unique_Archive_solutions"][idx+1]:
+    #         if check_not_present(data_FB["unique_Archive_solutions"][idx], sol):
+    #             # new_sol = np.append(new_sol, sol)
+    #             new_sol.append(sol)
+    #     print(f'size new_sol: {len(new_sol)}')
+    #     print('-----------------------------------------------------')
+    #     size_diff.append(len(data_FB["unique_Archive_solutions"][idx+1])-len(data_FB["unique_Archive_solutions"][idx]))
+    #     nr_new_sol.append(len(new_sol))
+    #
+    # ProcessResults().visualize_generational_series(size_diff)
+    # ProcessResults().visualize_generational_series(nr_new_sol)
 
-    ProcessResults().visualize_generational_series(size_diff)
-    ProcessResults().visualize_generational_series(nr_new_sol)
+    # for gen in data_FB['Archive_solutions']:
+    #     print(len(gen))
+    #     unique_gen = get_unique_array(gen)
+    #     print(len(unique_gen))
+    #     print('-----------------')
 
+ # ---------------------
     # print(len(data_FB['Archive_solutions'][76]))
     # print(len(np.unique(data_FB['Archive_solutions'][86], axis=0)))
     #
@@ -436,7 +504,7 @@ if __name__ == '__main__':
     hypervolume_metric_H = ProcessResults().calculate_generational_hypervolume(data_H['best_f'], reference_point)
     ProcessResults().visualize_generational_metrics(hypervolume_metric_H, x_data=data_H['nfe'], ax=axs[1, 0], title='Hypervolume Herman POT', x_label='nfe',
                                                    y_label='volume (-)')
-    hypervolume_metric_FB = ProcessResults().calculate_generational_hypervolume(data_FB['unique_Archive_solutions'],
+    hypervolume_metric_FB = ProcessResults().calculate_generational_hypervolume(data_FB['Archive_solutions'],
                                                                              reference_point)
     ProcessResults().visualize_generational_metrics(hypervolume_metric_FB, x_data=data_FB['nfe'], ax=axs[1, 1], title='Hypervolume ForestBorg', x_label='nfe',
                                                    y_label='volume (-)')

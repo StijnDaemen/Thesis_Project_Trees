@@ -115,44 +115,51 @@ class RICE:
             return model_variables_dynamic
 
         def collect_executive_variables():
+            # executive_variables_dict = {'mu': self.economic_submodel.mu,
+            #                             'S': self.economic_submodel.S,
+            #                             'E': self.economic_submodel.E,
+            #                             'damages': self.economic_submodel.damages,
+            #                             'abatement_cost': self.economic_submodel.abatement_cost,
+            #                             'abatement_fraction': self.economic_submodel.abatement_fraction,
+            #                             'SLRDAMAGES': self.climate_submodel.SLRDAMAGES,
+            #                             'gross_output': self.economic_submodel.gross_output,
+            #                             'net_output': self.economic_submodel.net_output,
+            #                             'I': self.economic_submodel.I,
+            #                             'CPC': self.economic_submodel.CPC,
+            #                             'forc': self.carbon_submodel.forc,
+            #                             'temp_atm': self.climate_submodel.temp_atm,
+            #                             'temp_ocean': self.climate_submodel.temp_ocean,
+            #                             'global_damage': self.welfare_submodel.global_damage,
+            #                             'global_output': self.welfare_submodel.global_output,
+            #                             'global_per_util_ww': self.welfare_submodel.global_per_util_ww,
+            #                             'TOTAL_SLR': self.climate_submodel.TOTALSLR,
+            #                             'mat': self.carbon_submodel.mat,
+            #                             'mup': self.carbon_submodel.mup,
+            #                             'ml': self.carbon_submodel.ml,
+            #                             'forcoth': self.carbon_submodel.forcoth,
+            #                             'E_worldwide_per_year': self.carbon_submodel.E_worldwide_per_year,
+            #                             'labour_force': self.economic_submodel.labour_force,
+            #                             'total_factor_productivity': self.economic_submodel.total_factor_productivity,
+            #                             'capital_stock': self.economic_submodel.capital_stock,
+            #                             'sigma_ratio': self.economic_submodel.sigma_ratio,
+            #                             'Eind': self.economic_submodel.Eind,
+            #                             'sigma_gr': self.economic_submodel.sigma_gr,
+            #                             'damage_frac': self.economic_submodel.damage_fraction,
+            #                             'SLRTHERM': self.climate_submodel.SLRTHERM,
+            #                             'GSICCUM': self.climate_submodel.GSICCUM,
+            #                             'GISCUM': self.climate_submodel.GISCUM,
+            #                             'AISCUM': self.climate_submodel.AISCUM,
+            #                             }
             executive_variables_dict = {'mu': self.economic_submodel.mu,
                                         'S': self.economic_submodel.S,
-                                        'E': self.economic_submodel.E,
-                                        'damages': self.economic_submodel.damages,
-                                        'abatement_cost': self.economic_submodel.abatement_cost,
-                                        'abatement_fraction': self.economic_submodel.abatement_fraction,
-                                        'SLRDAMAGES': self.climate_submodel.SLRDAMAGES,
-                                        'gross_output': self.economic_submodel.gross_output,
+                                        # 'irstp': self.levers['irstp'],
                                         'net_output': self.economic_submodel.net_output,
-                                        'I': self.economic_submodel.I,
-                                        'CPC': self.economic_submodel.CPC,
-                                        'forc': self.carbon_submodel.forc,
-                                        'temp_atm': self.climate_submodel.temp_atm,
-                                        'temp_ocean': self.climate_submodel.temp_ocean,
-                                        'global_damages': self.welfare_submodel.global_damages,
-                                        'global_output': self.welfare_submodel.global_output,
-                                        'global_period_util_ww': self.welfare_submodel.global_period_util_ww,
-                                        'TOTAL_SLR': self.climate_submodel.TOTALSLR,
                                         'mat': self.carbon_submodel.mat,
-                                        'mup': self.carbon_submodel.mup,
-                                        'ml': self.carbon_submodel.ml,
-                                        'forcoth': self.carbon_submodel.forcoth,
-                                        'E_worldwide_per_year': self.carbon_submodel.E_worldwide_per_year,
-                                        'labour_force': self.economic_submodel.labour_force,
-                                        'total_factor_productivity': self.economic_submodel.total_factor_productivity,
-                                        'capital_stock': self.economic_submodel.capital_stock,
-                                        'sigma_ratio': self.economic_submodel.sigma_ratio,
-                                        'Eind': self.economic_submodel.Eind,
-                                        'sigma_gr': self.economic_submodel.sigma_gr,
-                                        'damage_frac': self.economic_submodel.damage_fraction,
-                                        'SLRTHERM': self.climate_submodel.SLRTHERM,
-                                        'GSICCUM': self.climate_submodel.GSICCUM,
-                                        'GISCUM': self.climate_submodel.GISCUM,
-                                        'AISCUM': self.climate_submodel.AISCUM,
+                                        'global_utility': self.welfare_submodel.global_per_util_ww,
+                                        'global_damage': self.welfare_submodel.global_damage,
+                                        'temp_overshoots': self.welfare_submodel.temp_overshoots,
+                                        'temp_atm': self.climate_submodel.temp_atm,
                                         }
-            # executive_variables_dict = {'damages': self.economic_submodel.mu,
-            #                             'utility': self.welfare_submodel,
-            #                             'disutility': self.welfare_submodel,}
 
             exec_var_dict = {}
             for idx, region in enumerate(self.regions):
@@ -351,7 +358,7 @@ class RICE:
                 [self.carbon_submodel.mat[t], self.economic_submodel.net_output[:, t].sum(axis=0), year])
 
             policies = policy.split('|')
-            for policy_ in policies:
+            for policy_ in policies[:-1]:
                 if policy:
                     policy_unpacked = policy_.split('_')
                     policy_name = policy_unpacked[0]
@@ -409,30 +416,56 @@ class RICE:
             policy, rules = P.evaluate(
                 [self.carbon_submodel.mat[t], self.economic_submodel.net_output[:, t].sum(axis=0), year])
 
-            # mu_target = 2300
-            # sr = 0.1
-            # irstp = 0.015
-
-            policy_unpacked = policy.split('_')
-            policy_name = policy_unpacked[0]
-            policy_value = float(policy_unpacked[1])
-
-            # Initialize levers
-            # mu_target = 2135
-            # sr = 0.248
-            # irstp = 0.015
+            # # mu_target = 2300
+            # # sr = 0.1
+            # # irstp = 0.015
+            #
+            # policy_unpacked = policy.split('_')
+            # policy_name = policy_unpacked[0]
+            # policy_value = float(policy_unpacked[1])
+            #
+            # # Initialize levers
+            # # mu_target = 2135
+            # # sr = 0.248
+            # # irstp = 0.015
             mu_target = self.rng.integers(2100, 2250)
             sr = self.rng.uniform(0.2, 0.5)
             irstp = self.rng.uniform(0.01, 0.1)
+            #
+            #
+            # if policy_name == 'miu':
+            #     mu_target = policy_value
+            # elif policy_name == 'sr':
+            #     sr = policy_value
+            # elif policy_name == 'irstp':
+            #     irstp = policy_value
 
-
-            if policy_name == 'miu':
-                mu_target = policy_value
-            elif policy_name == 'sr':
-                sr = policy_value
-            elif policy_name == 'irstp':
-                irstp = policy_value
-
+            if policy == 'miu_2065':
+                mu_target = 2065
+            elif policy == 'miu_2100':
+                mu_target = 2100
+            elif policy == 'miu_2180':
+                mu_target = 2180
+            elif policy == 'miu_2250':
+                mu_target = 2250
+            elif policy == 'miu_2305':
+                mu_target = 2305
+            elif policy == 'sr_01':
+                sr = 0.1
+            elif policy == 'sr_02':
+                sr = 0.2
+            elif policy == 'sr_03':
+                sr = 0.3
+            elif policy == 'sr_04':
+                sr = 0.4
+            elif policy == 'sr_05':
+                sr = 0.5
+            elif policy == 'irstp_0005':
+                irstp = 0.005
+            elif policy == 'irstp_0015':
+                irstp = 0.015
+            elif policy == 'irstp_0025':
+                irstp = 0.025
 
             # Run one timestep of RICE
             self.economic_submodel.run_gross(t, year, mu_target=mu_target, sr=sr)
