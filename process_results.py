@@ -319,12 +319,14 @@ if __name__ == '__main__':
 
     # -- All figures as subplots ----------
     # file_path = r'/output_data/Folsom_Herman_25000nfe_snapshots.pkl'
-    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_Herman_100000nfe_snapshots.pkl'
+    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\HermanRICE_100000nfe_random_other_levers_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_Herman_100000nfe_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_Herman_25000nfe_snapshots.pkl'
     data_H = ProcessResults().Pickle(file_path)
 
     # file_path = r'/output_data/Folsom_ForestBorg_100000nfe_snapshots.pkl'
-    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_numpy_operators_full_restart_and_restart_escape_latch_fixed_Archive_duplicates_snapshots.pkl'
+    file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\ForestborgRICE_100000nfe_snapshots.pkl'
+    # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_25000nfe_new_numpy_operators_full_restart_and_restart_escape_latch_fixed_Archive_duplicates_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_100000nfe_new_numpy_operators_full_restart_and_restart_escape_latch_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\Folsom_ForestBorg_50000nfe_new_numpy_operators_no_restart_mech_snapshots.pkl'
     # file_path = r'C:\\Users\\Stijn Daemen\\Documents\\master thesis TU Delft\\code\\a_git folder_ do not keep large files here\\IAM_RICE2\\output_data\\TEST_Folsom_ForestBorg_10000nfe_snapshots.pkl'
@@ -387,57 +389,57 @@ if __name__ == '__main__':
     #         print(len(get_unique_array(gen)))
     #         print(f'gen {gen} has duplicates')
 
-    # print('before check')
-    # for gen in data_FB['Archive_solutions']:
-    #     gen_duplicates = 0
-    #     for sol in gen:
-    #         if np.any(np.array_equal(sol, x) for x in gen):
-    #             gen_duplicates += 1
-    #     if not len(gen) == gen_duplicates:
-    #         print('duplicate found')
+    print('before check')
+    for gen in data_FB['Archive_solutions']:
+        gen_duplicates = 0
+        for sol in gen:
+            if np.any(np.array_equal(sol, x) for x in gen):
+                gen_duplicates += 1
+        if not len(gen) == gen_duplicates:
+            print('duplicate found')
+
+    print('after check')
     #
-    # print('after check')
+    print('before check')
+    for gen in data_H['best_f']:
+        gen_duplicates = 0
+        for sol in gen:
+            if np.any(np.array_equal(sol, x) for x in gen):
+                gen_duplicates += 1
+        if not len(gen) == gen_duplicates:
+            print('duplicate found')
+
+    print('after check')
+
+    # best_H = data_H['best_f'][-1]
+    # best_FB = data_FB['Archive_solutions'][-1]
     #
-    # print('before check')
-    # for gen in data_H['best_f']:
-    #     gen_duplicates = 0
-    #     for sol in gen:
-    #         if np.any(np.array_equal(sol, x) for x in gen):
-    #             gen_duplicates += 1
-    #     if not len(gen) == gen_duplicates:
-    #         print('duplicate found')
+    # print(len(best_H))
+    # print(len(best_FB))
     #
-    # print('after check')
-
-    best_H = data_H['best_f'][-1]
-    best_FB = data_FB['Archive_solutions'][-1]
-
-    print(len(best_H))
-    print(len(best_FB))
-
-    H_dominates_FB = []
-    for sol_H in best_H:
-        for sol_FB in best_FB:
-            if ProcessResults().dominates(sol_H, sol_FB):
-                H_dominates_FB.append(sol_H)
-    # print(H_dominates_FB)
-    print(len(H_dominates_FB))
-
-    unique_dom = np.unique(H_dominates_FB, axis=0)
-    print(len(unique_dom))
-    print(unique_dom)
-
-    FB_dominates_H = []
-    for sol_FB in best_FB:
-        for sol_H in best_H:
-            if ProcessResults().dominates(sol_FB, sol_H):
-                FB_dominates_H.append(sol_FB)
-    # print(H_dominates_FB)
-    print(len(FB_dominates_H))
-
-    unique_dom = np.unique(FB_dominates_H, axis=0)
-    print(len(unique_dom))
-    print(unique_dom)
+    # H_dominates_FB = []
+    # for sol_H in best_H:
+    #     for sol_FB in best_FB:
+    #         if ProcessResults().dominates(sol_H, sol_FB):
+    #             H_dominates_FB.append(sol_H)
+    # # print(H_dominates_FB)
+    # print(len(H_dominates_FB))
+    #
+    # unique_dom = np.unique(H_dominates_FB, axis=0)
+    # print(len(unique_dom))
+    # print(unique_dom)
+    #
+    # FB_dominates_H = []
+    # for sol_FB in best_FB:
+    #     for sol_H in best_H:
+    #         if ProcessResults().dominates(sol_FB, sol_H):
+    #             FB_dominates_H.append(sol_FB)
+    # # print(H_dominates_FB)
+    # print(len(FB_dominates_H))
+    #
+    # unique_dom = np.unique(FB_dominates_H, axis=0)
+    # print(len(unique_dom))
+    # print(unique_dom)
 
     #
     # size_diff = []
@@ -487,6 +489,9 @@ if __name__ == '__main__':
     # for idx, pf in enumerate(data_FB['Archive_solutions']):
     #     print(idx, len(pf))
 
+    # print(data_H['best_f'][-1])
+    # print(data_FB['Archive_solutions'][-1])
+
     # Create a 2x2 subplot grid
     fig, axs = plt.subplots(2, 2, figsize=(10, 8))
 
@@ -499,7 +504,9 @@ if __name__ == '__main__':
     # ProcessResults().visualize_generational_metrics(generational_distance_FB, ax=axs[0, 1], title='Generational Distance ForestBORG',
     #                                                x_label='snapshot', y_label='distance (-)')
     # Hypervolume
-    reference_point = np.array([10, 500000, 10, -100])
+    # reference_point = np.array([10, 500000, 10, -100])
+    # reference_point = np.array([0, ])
+    reference_point = np.array([10, 100, 100])
 
     hypervolume_metric_H = ProcessResults().calculate_generational_hypervolume(data_H['best_f'], reference_point)
     ProcessResults().visualize_generational_metrics(hypervolume_metric_H, x_data=data_H['nfe'], ax=axs[1, 0], title='Hypervolume Herman POT', x_label='nfe',

@@ -399,12 +399,13 @@ if __name__ == '__main__':
         return print(f'Total elapsed time: {(end - start) / 60} minutes.')
 
     # POLICY TREE OPTIMIZATION WITH RICE ---------------
-    def optimization_RICE_POT_Herman(years_10, regions, save_location):
-        title_of_run = 'HermanRICE_100000nfe_random_other_levers'
+    def optimization_RICE_POT_Herman(years_10, regions, save_location, seed):
+        title_of_run = f'HermanRICE_100000nfe_random_other_levers_seed_{seed}'
         start = time.time()
         # input_path = os.path.join(package_directory)
         # model = RICE(years_10, regions, database_POT=input_path+'/ptreeopt/output_data/POT_Experiments.db', table_name_POT='indicator_groupsize_3_bin_tournament_1')
         # model = RICE(years_10, regions, save_location=save_location, file_name=title_of_run)
+        np.random.seed(seed)
         model = RICE(years_10, regions)
         algorithm = PTreeOpt(model.POT_control_Herman,
                              # feature_bounds=[[0.8, 2.8], [700, 900], [2005, 2305]],
@@ -686,13 +687,13 @@ if __name__ == '__main__':
         print(f'Elapsed time: {(end - start) / 60} minutes.')
         return
 
-    def optimization_RICE_POT_ForestBorg(years_10, regions, save_location):
+    def optimization_RICE_POT_ForestBorg(years_10, regions, save_location, seed):
         # title_of_run = 'ForestBORG_500000nfe_tree_depth_4_population_100_mat_net_output_year_continuous_period_utility_damages_tempovershoots'
-        title_of_run = 'ForestborgRICE_100000nfe'
+        title_of_run = f'ForestborgRICE_100000nfe_seed_{seed}'
         start = time.time()
 
         model = RICE(years_10, regions)
-        master_rng = np.random.default_rng(42)  # Master RNG
+        master_rng = np.random.default_rng(seed)  # Master RNG
         snapshots = ForestBorg(pop_size=100, master_rng=master_rng,
                                           model=model,
                                           metrics=['period_utility', 'damages', 'temp_overshoots'],
@@ -728,9 +729,10 @@ if __name__ == '__main__':
 
     # connect_to_EMA(years_10, regions, save_location)
 
-    optimization_RICE_POT_Herman(years_10, regions, save_location)
-
-    optimization_RICE_POT_ForestBorg(years_10, regions, save_location)
+    seeds = [5, 26, 17, 55, 104, 506]
+    for seed in seeds:
+        optimization_RICE_POT_Herman(years_10, regions, save_location, seed=seed)
+        optimization_RICE_POT_ForestBorg(years_10, regions, save_location, seed=seed)
 
     # optimization_Folsom_Herman(save_location)
 
