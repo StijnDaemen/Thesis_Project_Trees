@@ -689,7 +689,7 @@ if __name__ == '__main__':
 
     def optimization_RICE_POT_ForestBorg(years_10, regions, save_location, seed):
         # title_of_run = 'ForestBORG_500000nfe_tree_depth_4_population_100_mat_net_output_year_continuous_period_utility_damages_tempovershoots'
-        title_of_run = f'ForestborgRICE_100000nfe_seed_{seed}'
+        title_of_run = 'TESTFB_Archive_platypus'#f'ForestborgRICE_100000nfe_seed_{seed}'
         start = time.time()
 
         model = RICE(years_10, regions)
@@ -707,7 +707,7 @@ if __name__ == '__main__':
                                           discrete_features=False,
                                           # Optimization variables
                                           mutation_prob=0.5,
-                                          max_nfe=100000,
+                                          max_nfe=1000,
                                           epsilons=np.array([0.05, 0.05, 0.05]),
                                           gamma=2,
                                           tau=0.02,
@@ -729,9 +729,10 @@ if __name__ == '__main__':
 
     # connect_to_EMA(years_10, regions, save_location)
 
-    seeds = [5, 26, 17, 55, 104, 506]
+    # seeds = [5, 26, 17, 55, 104, 506]
+    seeds = [42]
     for seed in seeds:
-        optimization_RICE_POT_Herman(years_10, regions, save_location, seed=seed)
+        # optimization_RICE_POT_Herman(years_10, regions, save_location, seed=seed)
         optimization_RICE_POT_ForestBorg(years_10, regions, save_location, seed=seed)
 
     # optimization_Folsom_Herman(save_location)

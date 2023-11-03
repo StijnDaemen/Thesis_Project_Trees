@@ -13,6 +13,7 @@ import networkx as nx
 import matplotlib.patches as patches
 
 from collections import Counter
+import itertools
 import sqlite3
 
 
@@ -71,6 +72,7 @@ class ForestBorg:
         self.tau = tau
         self.tournament_size = 2
 
+        self.epsilon_progress = 0
         self.epsilon_progress_counter = 0
         self.epsilon_progress_tracker = np.array([])
         self.snapshot_dict = {'nfe': [],
@@ -107,7 +109,8 @@ class ForestBorg:
         print(f'size pop: {np.size(self.population)}')
 
         # Add the epsilon non-dominated solutions from the population to the Archive (initialize the Archive with the initial population, running add_to_Archive() function ensures no duplicates will be present.
-        self.Archive = np.array([self.population[0]])
+        # self.Archive = np.array([self.population[0]])
+        self.Archive = [self.population[0]]
         for sol in self.population:
             self.add_to_Archive(sol)
         print(f'size Archive: {np.size(self.Archive)}')
@@ -129,7 +132,7 @@ class ForestBorg:
 
                 intermediate_time = time.time()
                 print(
-                    f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress_counter} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
+                    f'\rnfe: {self.nfe}/{self.max_nfe} -- epsilon convergence: {self.epsilon_progress} -- elapsed time: {(intermediate_time - self.start_time) / 60} min -- number of restarts: {self.number_of_restarts}',
                     end='', flush=True)
 
         # -- Create visualizations of the run -------------------
@@ -203,7 +206,7 @@ class ForestBorg:
         self.add_to_Archive(offspring)
 
         # Update the epsilon progress tracker
-        self.epsilon_progress_tracker = np.append(self.epsilon_progress_tracker, self.epsilon_progress_counter)
+        self.epsilon_progress_tracker = np.append(self.epsilon_progress_tracker, self.epsilon_progress) # self.epsilon_progress_tracker = np.append(self.epsilon_progress_tracker, self.epsilon_progress_counter)
 
         # Record GA operator distribution
         self.record_GAOperator_distribution()
@@ -407,39 +410,139 @@ class ForestBorg:
             b = b // self.epsilons
         return np.all(a == b)
 
-    def add_to_Archive(self, candidate_solution):
-        if np.any([np.array_equal(candidate_solution.fitness, arr.fitness) for arr in self.Archive]):
-            return
+    # def add_to_Archive(self, candidate_solution):
+    #     if np.any([np.array_equal(candidate_solution.fitness, arr.fitness) for arr in self.Archive]):
+    #         return
+    #
+    #     epsilon_progress = False
+    #     delete_from_Archive = []
+    #     for idx, member in enumerate(self.Archive):
+    #         if self.dominates(candidate_solution.fitness, member.fitness - self.epsilons):
+    #             # self.Archive.remove(member)
+    #             # self.Archive = self.Archive[~np.isin(self.Archive, member)]
+    #             # self.Archive = np.delete(self.Archive, idx)
+    #             delete_from_Archive.append(idx)
+    #             print(candidate_solution.fitness, member.fitness - self.epsilons)
+    #             epsilon_progress = True
+    #         elif self.dominates(member.fitness - self.epsilons, candidate_solution.fitness):
+    #             # Check if they fall in the same box, if so, keep purely dominant solution
+    #             if self.dominates(candidate_solution.fitness, member.fitness):
+    #                 # self.Archive.remove(member)
+    #                 # self.Archive = self.Archive[~np.isin(self.Archive, member)]
+    #                 # self.Archive = np.delete(self.Archive, idx)
+    #                 delete_from_Archive.append(idx)
+    #                 print(candidate_solution.fitness, member.fitness)
+    #             elif self.dominates(member.fitness, candidate_solution.fitness):
+    #                 return
+    #         else:
+    #             # If the new solution extends the Archive
+    #             epsilon_progress = True
+    #     # Delete from Archive
+    #     self.Archive = np.delete(self.Archive, delete_from_Archive)
+    #     self.Archive = np.append(self.Archive, candidate_solution)
+    #
+    #     if epsilon_progress:
+    #         self.epsilon_progress_counter += 1
+    #
+    #     return
 
-        epsilon_progress = False
-        delete_from_Archive = []
-        for idx, member in enumerate(self.Archive):
-            if self.dominates(candidate_solution.fitness, member.fitness - self.epsilons):
-                # self.Archive.remove(member)
-                # self.Archive = self.Archive[~np.isin(self.Archive, member)]
-                # self.Archive = np.delete(self.Archive, idx)
-                delete_from_Archive.append(idx)
-                epsilon_progress = True
-            elif self.dominates(member.fitness - self.epsilons, candidate_solution.fitness):
-                # Check if they fall in the same box, if so, keep purely dominant solution
-                if self.dominates(candidate_solution.fitness, member.fitness):
-                    # self.Archive.remove(member)
-                    # self.Archive = self.Archive[~np.isin(self.Archive, member)]
-                    # self.Archive = np.delete(self.Archive, idx)
-                    delete_from_Archive.append(idx)
-                elif self.dominates(member.fitness, candidate_solution.fitness):
-                    return
+    def compare(self, solution1, solution2):
+        #      Returns -1 if the first solution dominates the second, 1 if the
+        #         second solution dominates the first, or 0 if the two solutions are
+        #         mutually non-dominated.
+
+        # then use epsilon dominance on the objectives
+        dominate1 = False
+        dominate2 = False
+
+        for i in range(len(solution1)):
+            o1 = solution1[i]
+            o2 = solution2[i]
+
+            epsilon = float(self.epsilons[i % len(self.epsilons)])
+            i1 = math.floor(o1 / epsilon)
+            i2 = math.floor(o2 / epsilon)
+
+            if i1 < i2:
+                dominate1 = True
+
+                if dominate2:
+                    return 0
+            elif i1 > i2:
+                dominate2 = True
+
+                if dominate1:
+                    return 0
+
+        if not dominate1 and not dominate2:
+            dist1 = 0.0
+            dist2 = 0.0
+
+            for i in range(len(solution1)):
+                o1 = solution1[i]
+                o2 = solution2[i]
+
+                epsilon = float(self.epsilons[i % len(self.epsilons)])
+                i1 = math.floor(o1 / epsilon)
+                i2 = math.floor(o2 / epsilon)
+
+                dist1 += math.pow(o1 - i1 * epsilon, 2.0)
+                dist2 += math.pow(o2 - i2 * epsilon, 2.0)
+
+            if dist1 < dist2:
+                return -1
             else:
-                # If the new solution extends the Archive
-                epsilon_progress = True
-        # Delete from Archive
-        self.Archive = np.delete(self.Archive, delete_from_Archive)
-        self.Archive = np.append(self.Archive, candidate_solution)
+                return 1
+        elif dominate1:
+            return -1
+        else:
+            return 1
 
-        if epsilon_progress:
-            self.epsilon_progress_counter += 1
+    def same_box_platypus(self, solution1, solution2):
 
-        return
+        # then use epsilon dominance on the objectives
+        dominate1 = False
+        dominate2 = False
+
+        for i in range(len(solution1)):
+            o1 = solution1[i]
+            o2 = solution2[i]
+
+            epsilon = float(self.epsilons[i % len(self.epsilons)])
+            i1 = math.floor(o1 / epsilon)
+            i2 = math.floor(o2 / epsilon)
+
+            if i1 < i2:
+                dominate1 = True
+
+                if dominate2:
+                    return False
+            elif i1 > i2:
+                dominate2 = True
+
+                if dominate1:
+                    return False
+
+        if not dominate1 and not dominate2:
+            return True
+        else:
+            return False
+
+    def add_to_Archive(self, solution):
+        flags = [self.compare(solution.fitness, s.fitness) for s in self.Archive]
+        dominates = [x > 0 for x in flags]
+        nondominated = [x == 0 for x in flags]
+        dominated = [x < 0 for x in flags]
+        not_same_box = [not self.same_box_platypus(solution.fitness, s.fitness) for s in self.Archive]
+
+        if any(dominates):
+            return False
+        else:
+            self.Archive = list(itertools.compress(self.Archive, nondominated)) + [solution]
+
+            if dominated and not_same_box:
+                self.epsilon_progress += 1
+
 
     def add_to_population(self, offspring):
         # If the offspring dominates one or more population members, the offspring replaces
@@ -478,7 +581,7 @@ class ForestBorg:
         self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
         self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
         self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
-        self.snapshot_dict['epsilon_progress'] = self.epsilon_progress_tracker
+        self.snapshot_dict['epsilon_progress'] = self.epsilon_progress # self.epsilon_progress_tracker
         return
 
 
