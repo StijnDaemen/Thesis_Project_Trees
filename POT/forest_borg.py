@@ -167,6 +167,7 @@ class ForestBorg:
         return self.snapshot_dict
 
     def iterate(self, i):
+        # print(f'Archive size: {len(self.Archive)}')
         if i%5000 == 0:
             # Check gamma (the population to Archive ratio)
             gamma = len(self.population) / len(self.Archive)
@@ -580,8 +581,8 @@ class ForestBorg:
         self.snapshot_dict['nfe'].append(self.nfe)
         self.snapshot_dict['time'].append((time.time() - self.start_time) / 60)
         self.snapshot_dict['Archive_solutions'].append([item.fitness for item in self.Archive])
-        self.snapshot_dict['Archive_trees'].append([str(item.dna) for item in self.Archive])
-        self.snapshot_dict['epsilon_progress'] = self.epsilon_progress # self.epsilon_progress_tracker
+        self.snapshot_dict['Archive_trees'].append([item.dna for item in self.Archive]) # [str(item.dna) for item in self.Archive]
+        self.snapshot_dict['epsilon_progress'].append(self.epsilon_progress)  # self.epsilon_progress_tracker
         return
 
 

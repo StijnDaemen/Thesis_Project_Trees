@@ -1,5 +1,7 @@
 import math
 import matplotlib.pyplot as plt
+import hvwfg
+# import pygmo as pg
 
 # Import the generative model by SD
 # Import the policy tree optimizer by Herman
@@ -14,6 +16,11 @@ import pandas as pd
 import numpy as np
 import sqlite3
 import os
+
+import networkx as nx
+import matplotlib.patches as patches
+
+from RICE_model.IAM_RICE import RICE
 
 package_directory = os.path.dirname(os.path.abspath(__file__))
 path_to_dir = os.path.join(package_directory)
@@ -58,40 +65,48 @@ def calculate_generational_hypervolume(pareto_front_generations, reference_point
         # for generation in pareto_front_generations:
         #     hypervolume_metric = np.append(hypervolume_metric, hypervolume(generation, reference_point))
 
-        def calculate_hypervolume(solutions, reference_point):
-            """
-            Calculate the hypervolume of a non-dominated set of solutions.
-
-            :param solutions: A list of solutions, where each solution is itself a list of objectives.
-            :param reference_point: A worst-case point that is dominated by all the solutions.
-            :return: The hypervolume enclosed by the solution set.
-            """
-            # Sort the solution set by the first objective in descending order
-            sorted_solutions = sorted(solutions, key=lambda x: x[0], reverse=True)
-
-            # Initialize hypervolume
-            hypervolume = 0.0
-
-            # Process each solution
-            for i, solution in enumerate(sorted_solutions):
-                # Distance to the next solution in the first objective or to the reference point if it's the last solution
-                if i < len(sorted_solutions) - 1:
-                    width = sorted_solutions[i + 1][0] - solution[0]
-                else:
-                    width = reference_point[0] - solution[0]
-
-                # Calculate the contribution of the current solution
-                contribution = width
-                for obj_index in range(1, len(solution)):
-                    contribution *= solution[obj_index] - reference_point[obj_index]
-
-                hypervolume += contribution
-
-            return hypervolume
+        # def calculate_hypervolume(solutions, reference_point):
+        #     """
+        #     Calculate the hypervolume of a non-dominated set of solutions.
+        #
+        #     :param solutions: A list of solutions, where each solution is itself a list of objectives.
+        #     :param reference_point: A worst-case point that is dominated by all the solutions.
+        #     :return: The hypervolume enclosed by the solution set.
+        #     """
+        #     # Sort the solution set by the first objective in descending order
+        #     sorted_solutions = sorted(solutions, key=lambda x: x[0], reverse=True)
+        #
+        #     # Initialize hypervolume
+        #     hypervolume = 0.0
+        #
+        #     # Process each solution
+        #     for i, solution in enumerate(sorted_solutions):
+        #         # Distance to the next solution in the first objective or to the reference point if it's the last solution
+        #         if i < len(sorted_solutions) - 1:
+        #             width = sorted_solutions[i + 1][0] - solution[0]
+        #         else:
+        #             width = reference_point[0] - solution[0]
+        #
+        #         # Calculate the contribution of the current solution
+        #         contribution = width
+        #         for obj_index in range(1, len(solution)):
+        #             contribution *= solution[obj_index] - reference_point[obj_index]
+        #
+        #         hypervolume += contribution
+        #
+        #     return hypervolume
 
         hypervolume_metric = np.array([])
         for generation in pareto_front_generations:
-            hypervolume_metric = np.append(hypervolume_metric, calculate_hypervolume(generation, reference_point))
+            generation = np.array(generation)
+            hypervolume_metric = np.append(hypervolume_metric, hvwfg.wfg(generation, reference_point))
+            # hypervolume_metric = np.append(hypervolume_metric, calculate_hypervolume(generation, reference_point))
+
+
+        # hypervolume_metric = np.array([])
+        # for generation in pareto_front_generations:
+        #     hv = pg.hypervolume(generation)
+        #     hypervolume_metric = np.append(hv.compute(reference_point, hv_algo=pg.hvwfg()))
 
         return hypervolume_metric
 
@@ -161,124 +176,307 @@ def indicators_actions_analysis(df, feature_names, action_names, save_name=None)
     return
 
 
+def visualize_organisms_objective_space(organisms, title=None, x_label=None, y_label=None, z_label=None, save=False):
+    '''
+
+    :param gorganisms: a list of objective space values, for multiple objectives, a list of lists. maximum 3d
+    :return: plot of supplied organisms in objective space
+    '''
+
+    # The data is supplied as a list of lists in which an inner list is a solution/organism which contains the values for each objective
+    # This data structure must be turned into separate list that each contain the objective values of one objective
+    data_dict = {}
+    for objective in range(1, len(organisms[0])+1):
+        data_dict[f'ofv{objective}'] = []
+
+    for idx, item in enumerate(organisms):
+        for key_idx, key in enumerate(data_dict.keys()):
+            data_dict[key].append(item[key_idx])
+
+    if len(data_dict.keys()) == 2:
+        plt.scatter(data_dict['ofv1'], data_dict['ofv2'])
+        plt.title(title)
+        plt.ylabel(y_label)
+        plt.xlabel(x_label)
+
+        if save:
+            plt.savefig(f'{title}.png', bbox_inches='tight')
+        else:
+            plt.show()
+        # Make sure to close the plt object once done
+        plt.close()
+    elif len(data_dict.keys()) == 3:
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(data_dict['ofv1'],
+                   data_dict['ofv2'],
+                   data_dict['ofv3'])
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.set_zlabel(z_label)
+        ax.view_init(elev=30.0, azim=15)
+
+        if save:
+            plt.savefig(f'{self.save_location}/{title}.png', bbox_inches='tight')
+        else:
+            plt.show()
+        # Make sure to close the plt object once done
+        plt.close()
+    else:
+        print("You must supply a list of lists that is either 2d or 3d, solutions in a higher dimensional space cannot be plotted with this function.")
+    pass
+
+    # return plt
+
+
+def visualize_tree(root):
+    def add_edges(graph, node, pos, x=0, y=0, layer=1, width=15):
+        pos[str(node)] = (x, y)
+        if node.l:
+            graph.add_edge(str(node), str(node.l))
+            le = x - width #/ 2 ** layer
+            add_edges(graph, node.l, pos, x=le, y=y - 1, layer=layer + 1)
+        if node.r:
+            graph.add_edge(str(node), str(node.r))
+            ri = x + width #/ 2 ** layer
+            add_edges(graph, node.r, pos, x=ri, y=y - 1, layer=layer + 1)
+        return (graph, pos)
+
+    def draw_tree(root):
+        graph, pos = nx.DiGraph(), {}
+        graph, pos = add_edges(graph, root, pos)
+
+        print(pos)
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        # Draw edges
+        nx.draw(graph, pos, with_labels=False, arrows=False, ax=ax, node_size=0)
+
+        for node, (x, y) in pos.items():
+            # Create a text instance
+            text = plt.text(x, y, str(node), ha='center', va='center', fontsize=12)
+
+            # Get the text's bounding box
+            bbox = text.get_window_extent(renderer=fig.canvas.get_renderer()).expanded(1.1, 1.2)
+            width = bbox.width / fig.dpi  # Convert bounding box width to inches
+            height = bbox.height / fig.dpi  # Convert bounding box height to inches
+
+            # Check if the node is a leaf node
+            if graph.out_degree(node) == 0:  # Leaf node
+                rectangle_color = 'lightgreen'
+            else:  # Non-leaf node
+                rectangle_color = 'skyblue'
+
+            # Draw a rectangle around the text
+            rectangle = patches.Rectangle((x - width / 2, y - height / 2), width*2, height, edgecolor='blue',
+                                          facecolor=rectangle_color)
+            ax.add_patch(rectangle)
+
+        ax.autoscale()
+        plt.axis('off')
+        plt.show()
+
+    def preorder_traversal(root):
+        if root:
+            # if isinstance(root, Action):
+            #     print(root.value, end=" ")  # Visit root
+            # elif isinstance(root, Feature):
+            #     print(root.name, end=" ")  # Visit root
+            preorder_traversal(root.l)  # Visit left subtree
+            preorder_traversal(root.r)  # Visit right subtree
+        return root
+
+    root = preorder_traversal(root)
+    draw_tree(root)
+    return
+
+
 if __name__ == '__main__':
-    # file_name = 'ForestborgRICE_100000nfe_seed_42_snapshots'
-    # print(path_to_dir+f'\output_data\{file_name}.pkl')
-    # snapshots = Pickle(path_to_dir+f'\output_data\{file_name}.pkl')
-    # print(snapshots.keys())
-    # print(snapshots['Archive_solutions'][-1])
-    # print(len(snapshots['Archive_solutions'][-1]))
-
-    file_name = 'TESTFB_Archive_platypus_snapshots'
-    snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
-
-    # PF_size = []
-    # for gen in snapshots['Archive_solutions']:
-    #     PF_size.append(len(gen))
+    # # file_name = 'ForestborgRICE_100000nfe_seed_42_snapshots'
+    # # print(path_to_dir+f'\output_data\{file_name}.pkl')
+    # # snapshots = Pickle(path_to_dir+f'\output_data\{file_name}.pkl')
+    # # print(snapshots.keys())
+    # # print(snapshots['Archive_solutions'][-1])
+    # # print(len(snapshots['Archive_solutions'][-1]))
     #
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(PF_size)
-    # plt.show()
-
-    def dominates(a, b):
-        # assumes minimization
-        # a dominates b if it is <= in all objectives and < in at least one
-        # Note SD: somehow the logic with np.all() breaks down if there are positive and negative numbers in the array
-        # So to circumvent this but still allow multiobjective optimisation in different directions under the
-        # constraint that every number is positive, just add a large number to every index.
-
-        large_number = 1000000000
-        a = a + large_number
-        b = b + large_number
-
-        return np.all(a <= b) and np.any(a < b)
-
-    for idx in range(len(snapshots['Archive_solutions'])-1):
-        for sol0 in snapshots['Archive_solutions'][idx]:
-            for sol1 in snapshots['Archive_solutions'][idx+1]:
-                if dominates(sol0, sol1):
-                    print(sol0, sol1)
-                else:
-                    print('yep!')
-
-    # for sol0 in snapshots['Archive_solutions'][0]:
-    #     print(sol0)
-
-
-
+    # # file_name = 'TESTFB_Archive_platypus_snapshots'
+    # # file_name = 'TESTFB_Archive_platypus50000nfe_eps_050101_snapshots'
+    # # file_name = 'TESTFB_Archive_platypus50000nfe_eps_005005005_snapshots'
+    # # file_name = 'TRY_FB_RICE_large_random_init_pop_10000_plus_20000fe_snapshots'
+    # # file_name = 'TRY_FB_RICE_large_random_init_pop_10000_plus_20000fe_discrete_actions_snapshots'
+    # # file_name = 'TRY_FB_RICE_30000fe_discrete_actions_restart_copy_snapshots'
+    # file_name = 'TRY_FB_RICE_30000fe_discrete_actions_restart_copy_no_escape_latch_snapshots'
+    # # file_name = 'TESTFB_Archive_platypus50000nfe_eps_005005005_no_restart_snapshots'
+    # # file_name = 'TESTFB_Archive_platypus_no_restart_1000nfe_snapshots'
+    # # file_name = 'HermanRICE_100000nfe_random_other_levers_seed_5_snapshots'
+    # snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
     #
-    # start_last = find_last_occurrence(snapshots['epsilon_progress'])
-    # print(len(snapshots['epsilon_progress'][start_last:]))
-    # snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress'][start_last:]
-    #
-    # # plt.plot(snapshots['epsilon_progress_metric'], color='blue')
-    # # plt.title('Epsilon Progress Metric')
-    # # plt.xlabel('Index')
-    # # plt.ylabel('Value')
-    # # plt.grid(True)
+    # # print(len(snapshots['Archive_solutions'][28]))
+    # # print(len(snapshots['Archive_solutions'][29]))
+    # #
+    # # PF_size = []
+    # # for gen in snapshots['Archive_solutions']:
+    # #     PF_size.append(len(gen))
+    # #
+    # # plt.figure(figsize=(10, 6))
+    # # plt.plot(PF_size)
     # # plt.show()
+    # #
+    # # # ---
+    # # def arrays_not_in_list(array_list1, array_list2, tol=1e-5):
+    # #     # Initialize an empty list to store unique arrays
+    # #     unique_arrays = []
+    # #
+    # #     # Check if each NumPy array from array_list1 exists in array_list2 within a given tolerance
+    # #     for arr1 in array_list1:
+    # #         if not any(np.allclose(arr1, arr2, atol=tol) for arr2 in array_list2):
+    # #             unique_arrays.append(arr1)
+    # #
+    # #     return unique_arrays
+    # #
+    # #
+    # # # Example usage with NumPy arrays:
+    # # list1 = snapshots['Archive_solutions'][28]
+    # # list2 = snapshots['Archive_solutions'][29]
+    # #
+    # # unique_in_list1 = arrays_not_in_list(list1, list2)
+    # # print("Arrays in 28 that are not in 29:")
+    # # for arr in unique_in_list1:
+    # #     print(arr)
+    # #
+    # # unique_in_list2 = arrays_not_in_list(list2, list1)
+    # # print("Arrays in 29 that are not in 28:")
+    # # for arr in unique_in_list2:
+    # #     print(arr)
     #
-    # reference_point = np.array([10, 100, 100])
+    # def dominates(a, b):
+    #     # assumes minimization
+    #     # a dominates b if it is <= in all objectives and < in at least one
+    #     # Note SD: somehow the logic with np.all() breaks down if there are positive and negative numbers in the array
+    #     # So to circumvent this but still allow multiobjective optimisation in different directions under the
+    #     # constraint that every number is positive, just add a large number to every index.
     #
+    #     large_number = 1000000000
+    #     a = a + large_number
+    #     b = b + large_number
+    #
+    #     return np.all(a <= b) and np.any(a < b)
+    #
+    # # for idx in range(len(snapshots['Archive_solutions'])-1):
+    # #     for sol0 in snapshots['Archive_solutions'][idx]:
+    # #         for sol1 in snapshots['Archive_solutions'][idx+1]:
+    # #             if dominates(sol0, sol1):
+    # #                 print(sol0, sol1)
+    # #             else:
+    # #                 print('yep!')
+    #
+    # # for sol0 in snapshots['Archive_solutions'][0]:
+    # #     print(sol0)
+    #
+    #
+    #
+    # #
+    # # start_last = find_last_occurrence(snapshots['epsilon_progress'])
+    # # print(len(snapshots['epsilon_progress'][start_last:]))
+    # # snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress'][start_last:]
+    # #
+    # # # plt.plot(snapshots['epsilon_progress_metric'], color='blue')
+    # # # plt.title('Epsilon Progress Metric')
+    # # # plt.xlabel('Index')
+    # # # plt.ylabel('Value')
+    # # # plt.grid(True)
+    # # # plt.show()
+    # #
+    # reference_point = np.array([-0.001, 5, 10])
+    # # Archive_solutions
     # hypervolume_metric = calculate_generational_hypervolume(snapshots['Archive_solutions'], reference_point)
+    # # hypervolume_metric = calculate_generational_hypervolume(snapshots['best_f'], reference_point)
     # snapshots['hypervolume_metric'] = hypervolume_metric
-    #
-    # print(len(hypervolume_metric))
-    # print(len(snapshots['nfe']))
-    # print(hypervolume_metric)
-    #
+    # #
+    # # print(len(hypervolume_metric))
+    # # print(len(snapshots['nfe']))
+    # # print(hypervolume_metric)
+    # #
     # # Create a 2x1 grid of subplots (2 rows, 1 column)
     # fig, axs = plt.subplots(1, 2, figsize=(8, 10))
-    #
-    # # Plotting the 'epsilon' series in the first subplot
-    # axs[0].plot(snapshots['epsilon_progress_metric'], color='blue')
-    # axs[0].set_title('Epsilon Series')
-    # axs[0].set_xlabel('Index')
-    # axs[0].set_ylabel('Value')
-    # axs[0].grid(True)
-    #
+    # #
+    # # # Plotting the 'epsilon' series in the first subplot
+    # # axs[0].plot(snapshots['epsilon_progress_metric'], color='blue')
+    # # axs[0].set_title('Epsilon Series')
+    # # axs[0].set_xlabel('Index')
+    # # axs[0].set_ylabel('Value')
+    # # axs[0].grid(True)
+    # #
     # # Plotting the 'hyper' series in the second subplot
     # axs[1].plot(snapshots['hypervolume_metric'], color='red')
     # axs[1].set_title('Hyper Series')
     # axs[1].set_xlabel('Index')
     # axs[1].set_ylabel('Value')
     # axs[1].grid(True)
-    #
+    # #
     # # Adjust spacing between plots
     # plt.tight_layout()
     # plt.show()
-
-    # df = pd.DataFrame(data=snapshots['Archive_trees'][-1], columns=['policy'])
-    # # print(df['policy'])
-    # # print(df.info())
-    # # print(df.head())
     #
-    # feature_names = ['mat', 'net_output', 'year']
-    # action_names = ['miu', 'sr', 'irstp']
-    # indicators_actions_analysis(df, feature_names, action_names)
+    # # df = pd.DataFrame(data=snapshots['Archive_trees'][-1], columns=['policy'])
+    # # # print(df['policy'])
+    # # # print(df.info())
+    # # # print(df.head())
+    # #
+    # # feature_names = ['mat', 'net_output', 'year']
+    # # action_names = ['miu', 'sr', 'irstp']
+    # # indicators_actions_analysis(df, feature_names, action_names)
 
 
 
 
     # -- Metrics figure -----------
 
-    # file_names = ['ForestborgRICE_100000nfe_seed_42_snapshots',
-    #               'ForestborgRICE_100000nfe_seed_5_snapshots',
-    #               'ForestborgRICE_100000nfe_seed_17_snapshots',
-    #               'ForestborgRICE_100000nfe_seed_26_snapshots',
-    #               'ForestborgRICE_100000nfe_seed_55_snapshots',
-    #               'ForestborgRICE_100000nfe_seed_104_snapshots',
-    #               'ForestborgRICE_100000nfe_seed_303_snapshots',
-    #               'ForestborgRICE_100000nfe_seed_506_snapshots',
-    #               'ForestborgRICE_100000nfe_seed_902_snapshots']
+    # # file_names = ['ForestborgRICE_100000nfe_seed_42_snapshots',
+    # #               'ForestborgRICE_100000nfe_seed_5_snapshots',
+    # #               'ForestborgRICE_100000nfe_seed_17_snapshots',
+    # #               'ForestborgRICE_100000nfe_seed_26_snapshots',
+    # #               'ForestborgRICE_100000nfe_seed_55_snapshots',
+    # #               'ForestborgRICE_100000nfe_seed_104_snapshots',
+    # #               'ForestborgRICE_100000nfe_seed_303_snapshots',
+    # #               'ForestborgRICE_100000nfe_seed_506_snapshots',
+    # #               'ForestborgRICE_100000nfe_seed_902_snapshots']
+    #
+    # # file_names = [
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_17_snapshots',
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_42_snapshots',
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_104_snapshots',
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_303_snapshots',
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_902_snapshots',
+    # # ]
+    #
+    # # file_names = [
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_5_seed_17_snapshots',
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_5_seed_42_snapshots',
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_5_seed_104_snapshots',
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_5_seed_303_snapshots',
+    # #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_5_seed_902_snapshots',
+    # # ]
+    #
+    # file_names = [
+    #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_6_seed_17_snapshots',
+    #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_6_seed_42_snapshots',
+    #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_6_seed_104_snapshots',
+    #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_6_seed_303_snapshots',
+    #     'FB_RICE_Archive_platypus30000nfe_eps_005005005_with_restart_gamma_4_depth_6_seed_902_snapshots',
+    # ]
     # dicts = []
     # for file_name in file_names:
     #     snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
     #     # Metrics analysis
-    #     reference_point = np.array([10, 100, 100])
+    #     print(snapshots['epsilon_progress'])
+    #     # reference_point = np.array([10, 100, 100])
+    #     reference_point = np.array([-0.001, 5, 10])
     #     snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['Archive_solutions'], reference_point)
-    #     start_last = find_last_occurrence(snapshots['epsilon_progress'])
-    #     snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress'][start_last:]
+    #     snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress']
+    #     # start_last = find_last_occurrence(snapshots['epsilon_progress'])
+    #     # snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress'][start_last:]
     #     dicts.append(snapshots)
     #     # # Trees analysis
     #     # df = pd.DataFrame(data=snapshots['Archive_trees'][-1], columns=['policy'])
@@ -302,31 +500,663 @@ if __name__ == '__main__':
     #     axs[1].grid(True, which='both', linestyle='--', linewidth=0.8)
     #
     # plt.title('Hypervolume ForestBORG applied to the RICE model, seed analysis', fontsize=16)
-    # plt.savefig('Hypervolume ForestBORG applied to the RICE model, seed analysis.png', dpi=300)
+    # # plt.savefig('Hypervolume ForestBORG applied to the RICE model, seed analysis.png', dpi=300)
     #
     # plt.tight_layout()
     # plt.show()
 
+    # ------------
+
+    # # file_name = 'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_17_copyfixrestart_discrete_actions_snapshots'
+    # # file_name = 'TESTFB_1000nfe_snapshots'
+    # file_name = 'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_4_seed_42_continuous_actions_scenario_SSP_1_negemissions_no_snapshots'
+    # file_name = 'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_5_seed_17_discrete_actions_snapshots'
+    # file_name = 'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_5_seed_42_discrete_actions_snapshots'
+    # file_name = 'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_4_seed_42_continuous_actions_depth_analysis_snapshots'
+    # file_name = 'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_3_seed_42_continuous_actions_scenario_SSP_1_negemissions_no_fixed_prune_snapshots'
+    # file_name = 'HermanRICE_20000nfe_random_other_levers_seed_42_depth_4_snapshots'
+    # snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+
+    # # print(snapshots['Archive_solutions'][-1])
+    # print(len(snapshots['Archive_solutions'][-1]))
+    # # print(snapshots['Archive_trees'][-1][0])
+    # print(len(snapshots['Archive_trees'][-1]))
+
+    # visualize_organisms_objective_space(snapshots['Archive_solutions'][-1])
+    #
+    # for tree in snapshots['Archive_trees'][-1]:
+    #     # print(str(tree))
+    #     visualize_tree(tree.root)
+
+    # print(snapshots['best_f'][-1])
+    # a = snapshots['best_f']
+    # b = -snapshots['best_f']
+
+    # a = snapshots['Archive_solutions'][-1]
+    # b = snapshots['Archive_solutions'][-1] + snapshots['Archive_solutions'][-1]
+
+    # print(a)
+    # print(b)
+
+
+    # print(np.hstack(snapshots['Archive_solutions'][-1]))
+    # print(np.vstack(snapshots['Archive_solutions'][-1]))
+    # print(np.dstack(snapshots['Archive_solutions'][-1]))
+    # print(np.column_stack(snapshots['Archive_solutions'][-1]))
+    #
+    # stacked = np.dstack(snapshots['Archive_solutions'][-1])
+
+    # ----------
+
+    # min_vals = []
+    # for gen in snapshots['Archive_solutions']:
+    #     stacked = np.column_stack(gen)
+    #     min_vals.append([np.min(stacked, axis=1)])
+    # reference_point = np.min(min_vals, axis=0)[0]
+    #
+    # snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['Archive_solutions'], reference_point)
+
+
+
+    #------------------
+    # file_name_Herman = 'Folsom_Herman_20000nfe_eps_001_1000_001_10_depth_4_snapshots'
+    # snapshots = Pickle(path_to_dir + f'\output_data\{file_name_Herman}.pkl')
+    # seed_PF = snapshots['best_f'][-1]
+    # min_vals = []
+    # max_vals = []
+    # # for file_name in file_names:
+    # #     snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+    # #     # seed_PF = seed_PF + snapshots['Archive_solutions'][-1]
+    # #     seed_PF = np.concatenate((seed_PF, snapshots['Archive_solutions'][-1]), axis=0)
+    # stacked = np.column_stack(seed_PF)
+    # min_vals.append([np.min(stacked, axis=1)])
+    # min_val = np.min(min_vals, axis=0)[0]
+    # # reference_point = np.min(min_vals, axis=0)[0]
+    # max_vals.append([np.max(stacked, axis=1)])
+    # max_val = np.max(max_vals, axis=0)[0]
+    # # reference_point = np.max(max_vals, axis=0)[0]
+    # # print(reference_point)
+    # print(min_val)
+    # print(max_val)
+    # snapshots['Archive_solutions_normalized'] = []
+    # for gen in snapshots['best_f']:
+    #     gen_PF = []
+    #     for sol in gen:
+    #         sol_norm = np.array([(sol - min_val) / (max_val - min_val)])
+    #         gen_PF.append(sol_norm)
+    #     snapshots['Archive_solutions_normalized'].append(gen_PF)
+
+    # ----------
+
+    # # OFFICIAL SCENARIO ANALYSIS WORST CASE
+    # years_10 = []
+    # for i in range(2005, 2315, 10):
+    #     years_10.append(i)
+    #
+    # regions = [
+    #     "US",
+    #     "OECD-Europe",
+    #     "Japan",
+    #     "Russia",
+    #     "Non-Russia Eurasia",
+    #     "China",
+    #     "India",
+    #     "Middle East",
+    #     "Africa",
+    #     "Latin America",
+    #     "OHI",
+    #     "Other non-OECD Asia",
+    # ]
+    #
+    # file_name = 'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_3_seed_42_continuous_actions_scenario_SSP_5_negemissions_no_fixed_prune_snapshots'
+    # snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+    #
+    # Nordhaus = []
+    # levers = {'mu_target': 2135,
+    #           'sr': 0.248,
+    #           'irstp': 0.015}
+    # dicts = []
+    # SSPs = [1, 2, 3, 4, 5]
+    # neg_ems = ['no', 'yes']
+    # for neg_em in neg_ems:
+    #     for SSP in SSPs:
+    #         scenario = {'SSP_scenario': SSP,  # 1, 2, 3, 4, 5
+    #                      'fosslim': 9000,  # range(4000, 13650), depending on SSP scenario
+    #                      'climate_sensitivity_distribution': 'lognormal',  # 'log', 'lognormal', 'Cauchy'
+    #                      'elasticity_climate_impact': 0,  # -1, 0, 1
+    #                      'price_backstop_tech': 1.470,  # [1.260, 1.470, 1.680, 1.890]
+    #                      'negative_emissions_possible': neg_em,  # 'yes' or 'no'
+    #                      't2xco2_index': 500, }  # 0, 999
+    #         Nordhaus.append(RICE(years_10, regions, scenario=scenario, levers=levers).ema_workbench_control())
+    #         # RICE = RICE(years_10, regions, scenario=scenario)
+    #         performance = []
+    #         for tree in snapshots['Archive_trees'][-1]:
+    #             performance.append(RICE(years_10, regions, scenario=scenario).POT_control(tree))
+    #         dicts.append(performance)
+    #
+    # fig = plt.figure()
+    # xmin = 0
+    # xmax = -10
+    # ymin = 0
+    # ymax = 32
+    # zmin = 3
+    # zmax = 45
+    # axes = [fig.add_subplot(2, 5, i, projection='3d') for i in range(1, 11)]
+    #
+    # names = ['SSP 1 - 0% neg. emissions',
+    #      'SSP 2 - 0% neg. emissions',
+    #      'SSP 3 - 0% neg. emissions',
+    #      'SSP 4 - 0% neg. emissions',
+    #      'SSP 5 - 0% neg. emissions',
+    #      'SSP 1 - 20% neg. emissions',
+    #      'SSP 2 - 20% neg. emissions',
+    #      'SSP 3 - 20% neg. emissions',
+    #      'SSP 4 - 20% neg. emissions',
+    #      'SSP 5 - 20% neg. emissions'
+    #      ]
+    # for index, ax in enumerate(axes):
+    #     d = dicts[index]
+    #     # visualize_organisms_objective_space(_['Archive_solutions'][-1])
+    #
+    #     organisms = d
+    #     data_dict = {}
+    #     for objective in range(1, len(organisms[0]) + 1):
+    #         data_dict[f'ofv{objective}'] = []
+    #
+    #     for idx__, item in enumerate(organisms):
+    #         for key_idx, key in enumerate(data_dict.keys()):
+    #             data_dict[key].append(item[key_idx])
+    #
+    #     ax.scatter(data_dict['ofv1'],
+    #               data_dict['ofv2'],
+    #               data_dict['ofv3'])
+    #     ax.scatter(Nordhaus[index][0], Nordhaus[index][1], Nordhaus[index][2], color='red', marker='D')
+    #     ax.set_xlim([xmin, xmax])
+    #     ax.set_ylim([ymin, ymax])
+    #     ax.set_zlim([zmin, zmax])
+    #     ax.set_title(names[index], fontsize=11)
+    #     ax.set_xlabel('utility', fontsize=7)
+    #     ax.set_ylabel('damages', fontsize=7)
+    #     ax.set_zlabel('temp. overshoots', fontsize=7)
+    #     ax.view_init(elev=20.0, azim=145)
+    #
+    # # plt.tight_layout()
+    # # plt.savefig('scenario_analysis_worst_case_10_RICE_FB_after_prune_fix.png', dpi=300)
+    # plt.show()
+    # # END OFFICIAL
+
+    # --------------
+
+    # # OFFICIAL SCENARIO ANALYSIS 3D PLOTS
+    # file_names = []
+    # SSPs = [1, 2, 3, 4, 5]
+    # neg_ems = ['no', 'yes']
+    # for neg_em in neg_ems:
+    #     for SSP in SSPs:
+    #         file_names.append(f'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_3_seed_42_continuous_actions_scenario_SSP_{SSP}_negemissions_{neg_em}_fixed_prune_snapshots')
+    #
+    #
+    # dicts = []
+    # for file_name in file_names:
+    #     snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+    #     # Metrics analysis
+    #     # reference_point = np.array([10, 100, 100])
+    #     reference_point = np.array([-0.001, 5, 10]).astype(np.float64) #  reference_point = np.array([10, 500000, 10, -100])
+    #     snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['Archive_solutions'],
+    #                                                                          reference_point)
+    #     snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress']
+    #     dicts.append(snapshots)
+    #
+    # Nordhaus = []
+    # years_10 = []
+    # for i in range(2005, 2315, 10):
+    #     years_10.append(i)
+    #
+    # regions = [
+    #     "US",
+    #     "OECD-Europe",
+    #     "Japan",
+    #     "Russia",
+    #     "Non-Russia Eurasia",
+    #     "China",
+    #     "India",
+    #     "Middle East",
+    #     "Africa",
+    #     "Latin America",
+    #     "OHI",
+    #     "Other non-OECD Asia",
+    # ]
+    # levers = {'mu_target': 2135,
+    #           'sr': 0.248,
+    #           'irstp': 0.015}
+    # SSPs = [1, 2, 3, 4, 5]
+    # neg_ems = ['no', 'yes']
+    # for neg_em in neg_ems:
+    #     for SSP in SSPs:
+    #         scenario = {'SSP_scenario': SSP,  # 1, 2, 3, 4, 5
+    #                      'fosslim': 9000,  # range(4000, 13650), depending on SSP scenario
+    #                      'climate_sensitivity_distribution': 'lognormal',  # 'log', 'lognormal', 'Cauchy'
+    #                      'elasticity_climate_impact': 0,  # -1, 0, 1
+    #                      'price_backstop_tech': 1.470,  # [1.260, 1.470, 1.680, 1.890]
+    #                      'negative_emissions_possible': neg_em,  # 'yes' or 'no'
+    #                      't2xco2_index': 500, }  # 0, 999
+    #         Nordhaus.append(RICE(years_10, regions, scenario=scenario, levers=levers).ema_workbench_control())
+    #         # RICE = RICE(years_10, regions, scenario=scenario)
+    #
+    # fig = plt.figure()
+    # xmin = -2
+    # xmax = -12.5
+    # ymin = 1
+    # ymax = 40
+    # zmin = 2.2
+    # zmax = 40
+    # axes = [fig.add_subplot(2, 5, i, projection='3d') for i in range(1, 11)]
+    # # names = ['SSP 1 - 0% neg. emissions',
+    # #          'SSP 1 - 20% neg. emissions',
+    # #          'SSP 2 - 0% neg. emissions',
+    # #          'SSP 2 - 20% neg. emissions',
+    # #          'SSP 3 - 0% neg. emissions',
+    # #          'SSP 3 - 20% neg. emissions',
+    # #          'SSP 4 - 0% neg. emissions',
+    # #          'SSP 4 - 20% neg. emissions',
+    # #          'SSP 5 - 0% neg. emissions',
+    # #          'SSP 5 - 20% neg. emissions'
+    # #          ]
+    # names = ['SSP 1 - 0% neg. emissions',
+    #      'SSP 2 - 0% neg. emissions',
+    #      'SSP 3 - 0% neg. emissions',
+    #      'SSP 4 - 0% neg. emissions',
+    #      'SSP 5 - 0% neg. emissions',
+    #      'SSP 1 - 20% neg. emissions',
+    #      'SSP 2 - 20% neg. emissions',
+    #      'SSP 3 - 20% neg. emissions',
+    #      'SSP 4 - 20% neg. emissions',
+    #      'SSP 5 - 20% neg. emissions'
+    #      ]
+    # for index, ax in enumerate(axes):
+    #     d = dicts[index]
+    #     # visualize_organisms_objective_space(_['Archive_solutions'][-1])
+    #
+    #     organisms = d['Archive_solutions'][-1]
+    #     data_dict = {}
+    #     for objective in range(1, len(organisms[0]) + 1):
+    #         data_dict[f'ofv{objective}'] = []
+    #
+    #     for idx__, item in enumerate(organisms):
+    #         for key_idx, key in enumerate(data_dict.keys()):
+    #             data_dict[key].append(item[key_idx])
+    #
+    #     ax.scatter(data_dict['ofv1'],
+    #               data_dict['ofv2'],
+    #               data_dict['ofv3'])
+    #     ax.scatter(Nordhaus[index][0], Nordhaus[index][1], Nordhaus[index][2], color='red', marker='D')
+    #     ax.set_xlim([xmin, xmax])
+    #     ax.set_ylim([ymin, ymax])
+    #     ax.set_zlim([zmin, zmax])
+    #     ax.set_title(names[index], fontsize=11)
+    #     ax.set_xlabel('utility', fontsize=7)
+    #     ax.set_ylabel('damages', fontsize=7)
+    #     ax.set_zlabel('temp. overshoots', fontsize=7)
+    #     ax.view_init(elev=20.0, azim=145)
+    #
+    # # plt.tight_layout()
+    # # plt.savefig('scenario_analysis_10_RICE_FB_after_prune_fix.png', dpi=300)
+    # plt.show()
+    # # END OFFICIAL
+
     # -------------
 
+    # # OFFICIAL: figure Herman vs FB Folsom and RICE (discrete actions)
+    # fig, axs = plt.subplots(1, 2, figsize=(10, 8))
+    # # Folsom ----------------------------------------
+    # xminF = 0
+    # xmaxF = 20500
+    # yminF = 0  # 1.7e08
+    # ymaxF = 1  # 8e08
+    # # file_names = [
+    # #     f'Folsom_ForestBorg_20000nfe_eps_001_1000_001_10_gamma_4_depth_4_seed_17_snapshots',
+    # #     f'Folsom_ForestBorg_20000nfe_eps_001_1000_001_10_gamma_4_depth_4_seed_42_snapshots',
+    # #     f'Folsom_ForestBorg_20000nfe_eps_001_1000_001_10_gamma_4_depth_4_seed_104_snapshots',
+    # #     f'Folsom_ForestBorg_20000nfe_eps_001_1000_001_10_gamma_4_depth_4_seed_303_snapshots',
+    # #     f'Folsom_ForestBorg_20000nfe_eps_001_1000_001_10_gamma_4_depth_4_seed_902_snapshots',
+    # # ]
+    # seeds = [17, 42, 104, 303, 902]
+    # file_names = []
+    # for seed in seeds:
+    #     file_names.append(f'FB_Folsom_20000nfe_eps_001_1000_001_10_gamma_4_depth_4_seed_{seed}_FB_H_comparison_snapshots')
+    #
+    # # Calculation of minimum and maximum values for each objective
+    # file_name_Herman = 'Folsom_Herman_20000nfe_eps_001_1000_001_10_depth_4_snapshots'
+    # snapshots = Pickle(path_to_dir + f'\output_data\{file_name_Herman}.pkl')
+    # seed_PF = snapshots['best_f'][-1]
+    # min_vals = []
+    # max_vals = []
+    # for file_name in file_names:
+    #     snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+    #     seed_PF = np.concatenate((seed_PF, snapshots['Archive_solutions'][-1]), axis=0)
+    # stacked = np.column_stack(seed_PF)
+    # min_vals.append([np.min(stacked, axis=1)])
+    # min_val = np.min(min_vals, axis=0)[0]
+    # max_vals.append([np.max(stacked, axis=1)])
+    # max_val = np.max(max_vals, axis=0)[0]
+    #
+    # dicts = []
+    # for file_name in file_names:
+    #     snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+    #     # Normalize values
+    #     snapshots['Archive_solutions_normalized'] = []
+    #     for gen in snapshots['Archive_solutions']:
+    #         gen_PF = []
+    #         for sol in gen:
+    #             sol_norm = np.array((sol - min_val) / (max_val - min_val))
+    #             gen_PF.append(sol_norm)
+    #         snapshots['Archive_solutions_normalized'].append(gen_PF)
+    #     # Metrics analysis
+    #     # reference_point = np.array([10, 100, 100])
+    #     # reference_point = np.array([3, 210000, 5, -300]).astype(np.float64) #  reference_point = np.array([10, 500000, 10, -100])
+    #     reference_point = np.array([1, 1, 1, 1]).astype(np.float64)
+    #     snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['Archive_solutions_normalized'],
+    #                                                                          reference_point)
+    #     snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress']
+    #     dicts.append(snapshots)
+    #
+    # for idx, d in enumerate(dicts):
+    #     if idx == 0:
+    #         axs[0].plot(d['nfe'], d['hypervolume_metric'], color='#6A7FDB', label='ForestBORG')
+    #     else:
+    #         axs[0].plot(d['nfe'], d['hypervolume_metric'], color='#6A7FDB')
+    #     axs[0].legend(loc='lower right', fontsize='medium', frameon=True)
+    #     axs[0].set_xlim([xminF, xmaxF])
+    #     axs[0].set_ylim([yminF, ymaxF])
+    #     axs[0].set_title(f'Folsom model', fontsize=12)
+    #     axs[0].set_xlabel('nfe', fontsize=11)
+    #     axs[0].set_ylabel('Hypervolume', fontsize=11)
+    #     axs[0].grid(True, which='both', linestyle='--', linewidth=0.8)
+    #
+    # file_name_Herman = 'Folsom_Herman_20000nfe_eps_001_1000_001_10_depth_4_snapshots'
+    # snapshots = Pickle(path_to_dir + f'\output_data\{file_name_Herman}.pkl')
+    # # reference_point = np.array([3, 210000, 5, -300]).astype(np.float64)
+    # # Normalize values
+    # snapshots['best_f_normalized'] = []
+    # for gen in snapshots['best_f']:
+    #     gen_PF = []
+    #     for sol in gen:
+    #         sol_norm = np.array((sol - min_val) / (max_val - min_val))
+    #         gen_PF.append(sol_norm)
+    #     snapshots['best_f_normalized'].append(gen_PF)
+    #
+    # reference_point = np.array([1, 1, 1, 1]).astype(np.float64)
+    # snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['best_f_normalized'],
+    #                                                                      reference_point)
+    # axs[0].plot(snapshots['nfe'], snapshots['hypervolume_metric'], color='#A04550', label='Original POT')
+    # axs[0].legend(loc='lower right', fontsize='medium', frameon=True)
+    # axs[0].set_xlim([xminF, xmaxF])
+    # axs[0].set_ylim([yminF, ymaxF])
+    # axs[0].set_title(f'Folsom model', fontsize=12)
+    # axs[0].set_xlabel('nfe', fontsize=11)
+    # axs[0].set_ylabel('Hypervolume', fontsize=11)
+    # axs[0].grid(True, which='both', linestyle='--', linewidth=0.8)
+    #
+    # # RICE ------------------------------------------
+    # xminR = 0
+    # xmaxR = 20500
+    # yminR = 0  # 360
+    # ymaxR = 1  # 420
+    # # file_names = [
+    # #     f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_17_copyfixrestart_discrete_actions_snapshots',
+    # #     f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_42_copyfixrestart_discrete_actions_snapshots',
+    # #     f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_104_copyfixrestart_discrete_actions_snapshots',
+    # #     f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_303_copyfixrestart_discrete_actions_snapshots',
+    # #     f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_4_seed_902_copyfixrestart_discrete_actions_snapshots',
+    # # ]
+    # seeds = [17, 42, 104, 303, 902]
+    # file_names = []
+    # for seed in seeds:
+    #     file_names.append(
+    #         f'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_4_seed_{seed}_discrete_actions_FB_H_comparison_snapshots')
+    #
+    # # Calculation of minimum and maximum values for each objective
+    # file_name_Herman = 'HermanRICE_20000nfe_random_other_levers_seed_42_depth_4_snapshots'
+    # snapshots = Pickle(path_to_dir + f'\output_data\{file_name_Herman}.pkl')
+    # seed_PF = snapshots['best_f'][-1]
+    # min_vals = []
+    # max_vals = []
+    # for file_name in file_names:
+    #     snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+    #     seed_PF = np.concatenate((seed_PF, snapshots['Archive_solutions'][-1]), axis=0)
+    # stacked = np.column_stack(seed_PF)
+    # min_vals.append([np.min(stacked, axis=1)])
+    # min_val = np.min(min_vals, axis=0)[0]
+    # max_vals.append([np.max(stacked, axis=1)])
+    # max_val = np.max(max_vals, axis=0)[0]
+    #
+    # dicts = []
+    # for file_name in file_names:
+    #     snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+    #     # Normalize values
+    #     snapshots['Archive_solutions_normalized'] = []
+    #     for gen in snapshots['Archive_solutions']:
+    #         gen_PF = []
+    #         for sol in gen:
+    #             sol_norm = np.array((sol - min_val) / (max_val - min_val))
+    #             gen_PF.append(sol_norm)
+    #         snapshots['Archive_solutions_normalized'].append(gen_PF)
+    #     # Metrics analysis
+    #     # reference_point = np.array([10, 100, 100])
+    #     # reference_point = np.array([-0.001, 5, 10])
+    #     # reference_point = np.array([-15.50304053, 0.32949249, 3.71813423])
+    #     reference_point = np.array([1, 1, 1]).astype(np.float64)
+    #     snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['Archive_solutions_normalized'],
+    #                                                                          reference_point)
+    #     snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress']
+    #     dicts.append(snapshots)
+    #
+    # for idx, d in enumerate(dicts):
+    #     if idx == 0:
+    #         axs[1].plot(d['nfe'], d['hypervolume_metric'], color='#6A7FDB', label='ForestBORG')
+    #     else:
+    #         axs[1].plot(d['nfe'], d['hypervolume_metric'], color='#6A7FDB')
+    #     axs[1].legend(loc='lower right', fontsize='medium', frameon=True)
+    #     # axs[1].legend(loc=(0.70, 0.45), fontsize='medium', frameon=True)
+    #     axs[1].set_xlim([xminR, xmaxR])
+    #     axs[1].set_ylim([yminR, ymaxR])
+    #     axs[1].set_title(f'RICE model', fontsize=12)
+    #     axs[1].set_xlabel('nfe', fontsize=11)
+    #     axs[1].set_ylabel('Hypervolume', fontsize=11)
+    #     axs[1].grid(True, which='both', linestyle='--', linewidth=0.8)
+    #
+    # file_name_Herman = 'HermanRICE_20000nfe_random_other_levers_seed_42_depth_4_snapshots'
+    # snapshots = Pickle(path_to_dir + f'\output_data\{file_name_Herman}.pkl')
+    # # Normalize values
+    # snapshots['best_f_normalized'] = []
+    # for gen in snapshots['best_f']:
+    #     gen_PF = []
+    #     for sol in gen:
+    #         sol_norm = np.array((sol - min_val) / (max_val - min_val))
+    #         gen_PF.append(sol_norm)
+    #     snapshots['best_f_normalized'].append(gen_PF)
+    # # reference_point = np.array([-0.001, 5, 10])
+    # reference_point = np.array([1, 1, 1]).astype(np.float64)
+    # snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['best_f_normalized'],
+    #                                                                      reference_point)
+    # axs[1].plot(snapshots['nfe'], snapshots['hypervolume_metric'], color='#A04550', label='Original POT')
+    # axs[1].legend(loc='lower right', fontsize='medium', frameon=True)
+    # axs[1].set_xlim([xminR, xmaxR])
+    # axs[1].set_ylim([yminR, ymaxR])
+    # axs[1].set_title(f'RICE model', fontsize=12)
+    # axs[1].set_xlabel('nfe', fontsize=11)
+    # axs[1].set_ylabel('Hypervolume', fontsize=11)
+    # axs[1].grid(True, which='both', linestyle='--', linewidth=0.8)
+    #
+    # plt.tight_layout()
+    # # plt.savefig('Hypervolume ForestBORG and Original POT on Folsom and RICE_after_prune_fix_normalized.png', dpi=300)
+    # plt.show()
+    # # END OFFICIAL
 
 
-# # Plotting
-# plt.figure(figsize=(10, 6))
-# for idx, d in enumerate(dicts):
-#     plt.plot(d['nfe'], d['hypervolume_metric'], color='blue')#, label=f'Dict {idx + 1}', color='blue')#, cmap=plt.get_cmap(colormap))#, marker='o')
-#
-# plt.xlabel('nfe', fontsize=14)
-# plt.ylabel('hypervolume (-)', fontsize=14)
-# plt.title('Hypervolume ForestBORG applied to the RICE model, seed analysis', fontsize=16)
-# plt.legend(loc='upper left', fontsize=12)
-# plt.grid(True, which='both', linestyle='--', linewidth=0.5)
-# # plt.xlim([0, 50])
-# # plt.ylim([0, 40])
-# plt.show()
+    # OFFICIAL: Figure hypervolume depth-seed analysis ForestBORG on RICE
+    fig, axs = plt.subplots(2, 3, figsize=(10, 8))
+    depths = [2, 3, 4, 5, 6, 7]
+    xmin = 0
+    xmax = 20500
+    ymin = 0  # 120
+    ymax = 1  # 220
+
+    for index, depth in enumerate(depths):
+        file_names = []
+        seeds = [17, 42, 104, 303, 902]
+        for seed in seeds:
+            file_names.append(f'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_{depth}_seed_{seed}_continuous_actions_depth_analysis_snapshots')
+
+        # Calculation of minimum and maximum values for each objective
+        min_vals = []
+        max_vals = []
+        seed_PF = np.empty((0, 3))
+        for file_name in file_names:
+            snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+            seed_PF = np.concatenate((seed_PF, snapshots['Archive_solutions'][-1]), axis=0)
+        stacked = np.column_stack(seed_PF)
+        min_vals.append([np.min(stacked, axis=1)])
+        min_val = np.min(min_vals, axis=0)[0]
+        max_vals.append([np.max(stacked, axis=1)])
+        max_val = np.max(max_vals, axis=0)[0]
+
+    # for index, depth in enumerate(depths):
+    #     file_names = [
+    #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_17_copyfixrestart_snapshots',
+    #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_42_copyfixrestart_snapshots',
+    #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_104_copyfixrestart_snapshots',
+    #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_303_copyfixrestart_snapshots',
+    #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_902_copyfixrestart_snapshots',
+    #     ]
+
+    for index, depth in enumerate(depths):
+        file_names = []
+        seeds = [17, 42, 104, 303, 902]
+        for seed in seeds:
+            file_names.append(f'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_{depth}_seed_{seed}_continuous_actions_depth_analysis_snapshots')
+
+        # # Calculation of minimum and maximum values for each objective
+        # min_vals = []
+        # max_vals = []
+        # seed_PF = np.empty((0, 3))
+        # for file_name in file_names:
+        #     snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+        #     seed_PF = np.concatenate((seed_PF, snapshots['Archive_solutions'][-1]), axis=0)
+        # stacked = np.column_stack(seed_PF)
+        # min_vals.append([np.min(stacked, axis=1)])
+        # min_val = np.min(min_vals, axis=0)[0]
+        # max_vals.append([np.max(stacked, axis=1)])
+        # max_val = np.max(max_vals, axis=0)[0]
+
+        dicts = []
+        for file_name in file_names:
+            snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+            # Normalize values
+            snapshots['Archive_solutions_normalized'] = []
+            for gen in snapshots['Archive_solutions']:
+                gen_PF = []
+                for sol in gen:
+                    sol_norm = np.array((sol - min_val) / (max_val - min_val))
+                    gen_PF.append(sol_norm)
+                snapshots['Archive_solutions_normalized'].append(gen_PF)
+            # Metrics analysis
+            # reference_point = np.array([10, 100, 100])
+            # reference_point = np.array([-0.001, 5, 10])
+            reference_point = np.array([1, 1, 1]).astype(np.float64)
+            snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['Archive_solutions_normalized'],
+                                                                                 reference_point)
+            snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress']
+            # start_last = find_last_occurrence(snapshots['epsilon_progress'])
+            # snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress'][start_last:]
+            dicts.append(snapshots)
+
+        pos = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
+        for idx, d in enumerate(dicts):
+            axs[pos[index]].plot(d['nfe'], d['hypervolume_metric'], color='#6A7FDB')  # #A2CFFE
+            axs[pos[index]].set_xlim([xmin, xmax])
+            axs[pos[index]].set_ylim([ymin, ymax])
+            axs[pos[index]].set_title(f'depth {depth}', fontsize=12)
+            axs[pos[index]].set_xlabel('nfe', fontsize=11)
+            axs[pos[index]].set_ylabel('Hypervolume', fontsize=11)
+            axs[pos[index]].grid(True, which='both', linestyle='--', linewidth=0.8)
+
+    plt.tight_layout()
+    # plt.savefig('Hypervolume ForestBORG applied to the RICE model seed and depth analysis_fixed_prune_normalized.png', dpi=300)
+    plt.show()
+    # END OFFICIAL
+
+    # # OFFICIAL: Figure depth-seed analysis ForestBORG on RICE epsilon progress
+    # fig, axs = plt.subplots(2, 3, figsize=(10, 8))
+    # depths = [2, 3, 4, 5, 6, 7]
+    # xmin = 0
+    # xmax = 20500
+    # ymin = 0
+    # ymax = 700
+    # # for index, depth in enumerate(depths):
+    # #     file_names = [
+    # #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_17_copyfixrestart_snapshots',
+    # #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_42_copyfixrestart_snapshots',
+    # #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_104_copyfixrestart_snapshots',
+    # #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_303_copyfixrestart_snapshots',
+    # #         f'FB_RICE_Archive_platypus20000nfe_eps_005005005_with_restart_gamma_4_depth_{depth}_seed_902_copyfixrestart_snapshots',
+    # #     ]
+    # for index, depth in enumerate(depths):
+    #     file_names = []
+    #     seeds = [17, 42, 104, 303, 902]
+    #     for seed in seeds:
+    #         file_names.append(
+    #             f'FB_RICE_20000nfe_eps_005005005_gamma_4_depth_{depth}_seed_{seed}_continuous_actions_depth_analysis_snapshots')
+    #     dicts = []
+    #     for file_name in file_names:
+    #         snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+    #         # Metrics analysis
+    #         # reference_point = np.array([-0.001, 5, 10])
+    #         # snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['Archive_solutions'],
+    #         #                                                                      reference_point)
+    #         snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress']
+    #         # start_last = find_last_occurrence(snapshots['epsilon_progress'])
+    #         # snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress'][start_last:]
+    #         dicts.append(snapshots)
+    #
+    #     pos = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
+    #     for idx, d in enumerate(dicts):
+    #         axs[pos[index]].plot(d['nfe'], d['epsilon_progress_metric'], color='#6A7FDB')
+    #         axs[pos[index]].set_xlim([xmin, xmax])
+    #         axs[pos[index]].set_ylim([ymin, ymax])
+    #         axs[pos[index]].set_title(f'depth {depth}', fontsize=12)
+    #         axs[pos[index]].set_xlabel('nfe', fontsize=11)
+    #         axs[pos[index]].set_ylabel('Epsilon progress', fontsize=11)
+    #         axs[pos[index]].grid(True, which='both', linestyle='--', linewidth=0.8)
+    #
+    # plt.tight_layout()
+    # # plt.savefig('Epsilon progress ForestBORG applied to the RICE model seed and depth analysis_fixed_prune.png', dpi=300)
+    # plt.show()
+    # # END OFFICIAL
 
 
 # ----------------------------------------------------------------------
+
+# # Calculation of reference point
+#     file_name_Herman = 'Folsom_Herman_20000nfe_eps_001_1000_001_10_depth_4_snapshots'
+#     snapshots = Pickle(path_to_dir + f'\output_data\{file_name_Herman}.pkl')
+#     seed_PF = -snapshots['best_f'][-1]
+#     min_vals = []
+#     max_vals = []
+#     for file_name in file_names:
+#         snapshots = Pickle(path_to_dir + f'\output_data\{file_name}.pkl')
+#         # seed_PF = seed_PF + snapshots['Archive_solutions'][-1]
+#         seed_PF = np.concatenate((seed_PF, np.negative(snapshots['Archive_solutions'][-1])), axis=0)
+#     stacked = np.column_stack(seed_PF)
+#     min_vals.append([np.min(stacked, axis=1)])
+#     min_val = np.min(min_vals, axis=0)[0]
+#     # reference_point = np.min(min_vals, axis=0)[0]
+#     max_vals.append([np.max(stacked, axis=1)])
+#     max_val = np.max(max_vals, axis=0)[0]
+#     # reference_point = np.max(max_vals, axis=0)[0]
+#     # print(reference_point)
+#     print(min_val)
+#     print(max_val)
 
 
 # class ProcessResults:

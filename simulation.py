@@ -345,12 +345,12 @@ if __name__ == '__main__':
                                           mutation_prob=0.5,
                                           max_nfe=10000,
                                           epsilons=[0.01, 1000, 0.01, 10],
-                                          gamma=2,
+                                          gamma=4,
                                           tau=0.02,
                                           save_location=save_location,
                                           title_of_run=title_of_run,
                                           ).run()
-        df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
+        # df_optimized_metrics.to_excel(f'{save_location}/{title_of_run}.xlsx')
         pickle.dump(snapshots, open(f'{save_location}/{title_of_run}_snapshots.pkl', 'wb'))
         end = time.time()
         return print(f'Total elapsed time: {(end - start) / 60} minutes.')
@@ -689,7 +689,7 @@ if __name__ == '__main__':
 
     def optimization_RICE_POT_ForestBorg(years_10, regions, save_location, seed):
         # title_of_run = 'ForestBORG_500000nfe_tree_depth_4_population_100_mat_net_output_year_continuous_period_utility_damages_tempovershoots'
-        title_of_run = 'TESTFB_Archive_platypus'#f'ForestborgRICE_100000nfe_seed_{seed}'
+        title_of_run = 'TESTFB_1000nfe'#f'ForestborgRICE_100000nfe_seed_{seed}'
         start = time.time()
 
         model = RICE(years_10, regions)
