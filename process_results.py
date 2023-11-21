@@ -1058,12 +1058,14 @@ if __name__ == '__main__':
                 gen_PF = []
                 for sol in gen:
                     sol_norm = np.array((sol - min_val) / (max_val - min_val))
+                    # sol_norm = np.negative((sol - min_val) / (max_val - min_val))
                     gen_PF.append(sol_norm)
                 snapshots['Archive_solutions_normalized'].append(gen_PF)
             # Metrics analysis
             # reference_point = np.array([10, 100, 100])
             # reference_point = np.array([-0.001, 5, 10])
             reference_point = np.array([1, 1, 1]).astype(np.float64)
+            # reference_point = np.array([0, 0, 0]).astype(np.float64)
             snapshots['hypervolume_metric'] = calculate_generational_hypervolume(snapshots['Archive_solutions_normalized'],
                                                                                  reference_point)
             snapshots['epsilon_progress_metric'] = snapshots['epsilon_progress']

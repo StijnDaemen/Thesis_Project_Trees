@@ -348,7 +348,7 @@ class RICE:
     #     utilitarian_objective_function_value3 = self.welfare_submodel.temp_overshoots.sum()
     #     return utilitarian_objective_function_value1, utilitarian_objective_function_value3
 
-    def POT_control(self, P):
+    def POT_control_continuous(self, P):
         # Note that currently the indicator variables are hardcoded in, so check if they match the feature_names! (
         # also in the same order)
         t = 0
@@ -407,7 +407,7 @@ class RICE:
         # return utilitarian_objective_function_value1, utilitarian_objective_function_value2, utilitarian_objective_function_value3  # objective_function_value
         return utilitarian_objective_function_value1, utilitarian_objective_function_value2, utilitarian_objective_function_value3
 
-    def POT_control_Herman(self, P):
+    def POT_control_discrete(self, P):
         # Note that currently the indicator variables are hardcoded in, so check if they match the feature_names! (
         # also in the same order)
         t = 0
