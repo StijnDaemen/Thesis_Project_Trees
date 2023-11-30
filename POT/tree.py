@@ -55,10 +55,14 @@ class Action(Node):
         super(Action, self).__init__()
 
     def __str__(self):
+        # try:
+        #     return '%0.3f (%0.2f%%)' % (self.value, self.count)
+        # except TypeError:
+        #     return '%s (%0.2f%%)' % (self.value, self.count)
         try:
-            return '%0.3f (%0.2f%%)' % (self.value, self.count)
+            return '%0.3f' % self.value
         except TypeError:
-            return '%s (%0.2f%%)' % (self.value, self.count)
+            return '%s' % self.value
 
 
 class PTree(object):

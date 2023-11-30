@@ -255,6 +255,7 @@ def RICE_ForestBorg_continuous(save_location, seed, max_nfe, depth, epsilons, ga
                            epsilons=epsilons,  # np.array([0.05, 0.05, 0.05]),
                            gamma=gamma,  # 4,
                            tau=tau,  # 0.02,
+                           # restart_interval=restart_interval,
                            save_location=save_location,
                            title_of_run=title_of_run,
                            ).run()
@@ -282,64 +283,74 @@ if __name__ == '__main__':
     # RICE on the discrete systems is not used for any of the experiments at the moment, can do later
     # No scenarios are passed to RICE eventhough they could be. Only the standard RICE scenario is used for these experiments
 
-    # -- Folsom ------------------
-    # -- I & II -- Run time and operator dynamics - 5 seeds, other controls constant
-    max_nfe = 200 # 30000
+    max_nfe = 4999  # 30000
     depth = 3
-    epsilons = np.array([0.01, 1000, 0.01, 10])
+    epsilons = [0.01, 1000, 0.01, 10]
     gamma = 4
     tau = 0.02
     restart_interval = 5000
-    seeds = [17, 42, 104, 303, 902]
-    # for seed in seeds:
-    #     Folsom_Herman_discrete(save_location, seed, max_nfe, depth, epsilons)
+    seeds = [17, 42]#, 104, 303, 902]
     for seed in seeds:
-        Folsom_ForestBorg_discrete(save_location, seed, max_nfe, depth, epsilons, gamma, tau, restart_interval)
+        Folsom_Herman_discrete(save_location, seed, max_nfe, depth, epsilons)
 
-    # -- III -- Controllability map -  control for depth, gamma and restart_interval, for now on one seed
-    max_nfe = 200 #20000
-    depths = [2, 3, 4, 5, 6]
-    epsilons = np.array([0.01, 1000, 0.01, 10])
-    gammas = [3, 4, 5]
-    tau = 0.02
-    restart_intervals = [500, 2000, 5000]
-    seed = 42
-    for depth in depths:
-        for gamma in gammas:
-            for restart_interval in restart_intervals:
-                Folsom_ForestBorg_discrete(save_location, seed, max_nfe, depth, epsilons, gamma, tau, restart_interval)
-
-    # -- IV & V -- Use seed 42 from experiment I & II
-
-    # -- RICE ------------------
-    # -- I & II -- Run time and operator dynamics - 5 seeds, other controls constant
-    max_nfe = 200 #30000
-    depth = 3
-    epsilons = np.array([0.01, 1000, 0.01, 10])
-    gamma = 4
-    tau = 0.02
-    restart_interval = 5000
-    seeds = [17, 42, 104, 303, 902]
+    # # -- Folsom ------------------
+    # # -- I & II -- Run time and operator dynamics - 5 seeds, other controls constant
+    # max_nfe = 200 # 30000
+    # depth = 3
+    # epsilons = np.array([0.01, 1000, 0.01, 10])
+    # gamma = 4
+    # tau = 0.02
+    # restart_interval = 5000
+    # seeds = [17, 42, 104, 303, 902]
+    # # for seed in seeds:
+    # #     Folsom_Herman_discrete(save_location, seed, max_nfe, depth, epsilons)
     # for seed in seeds:
-    #     Folsom_Herman_discrete(save_location, seed, max_nfe, depth, epsilons)
-    for seed in seeds:
-        RICE_ForestBorg_continuous(save_location, seed, max_nfe, depth, epsilons, gamma, tau, restart_interval)
-
-    # -- III -- Controllability map -  control for depth, gamma and restart_interval, for now on one seed
-    max_nfe = 200 #20000
-    depths = [2, 3, 4, 5, 6]
-    epsilons = np.array([0.01, 1000, 0.01, 10])
-    gammas = [3, 4, 5]
-    tau = 0.02
-    restart_intervals = [500, 2000, 5000]
-    seed = 42
-    for depth in depths:
-        for gamma in gammas:
-            for restart_interval in restart_intervals:
-                RICE_ForestBorg_continuous(save_location, seed, max_nfe, depth, epsilons, gamma, tau,
-                                           restart_interval)
-
-    # -- IV & V -- Use seed 42 from experiment I & II
+    #     Folsom_ForestBorg_discrete(save_location, seed, max_nfe, depth, epsilons, gamma, tau, restart_interval)
+    #
+    # # -- III -- Controllability map -  control for depth, gamma and restart_interval, for now on one seed
+    # max_nfe = 200 #20000
+    # depths = [2, 3, 4, 5, 6]
+    # epsilons = np.array([0.01, 1000, 0.01, 10])
+    # gammas = [3, 4, 5]
+    # tau = 0.02
+    # restart_intervals = [500, 2000, 5000]
+    # seed = 42
+    # for depth in depths:
+    #     for gamma in gammas:
+    #         for restart_interval in restart_intervals:
+    #             Folsom_ForestBorg_discrete(save_location, seed, max_nfe, depth, epsilons, gamma, tau, restart_interval)
+    #
+    # # -- IV & V -- Use seed 42 from experiment I & II
+    #
+    # # -- RICE ------------------
+    # # -- I & II -- Run time and operator dynamics - 5 seeds, other controls constant
+    # max_nfe = 200 #30000
+    # depth = 3
+    # epsilons = np.array([0.05, 0.05, 0.05])
+    # gamma = 4
+    # tau = 0.02
+    # restart_interval = 5000
+    # seeds = [17, 42, 104, 303, 902]
+    # # for seed in seeds:
+    # #     Folsom_Herman_discrete(save_location, seed, max_nfe, depth, epsilons)
+    # for seed in seeds:
+    #     RICE_ForestBorg_continuous(save_location, seed, max_nfe, depth, epsilons, gamma, tau, restart_interval)
+    #
+    # # -- III -- Controllability map -  control for depth, gamma and restart_interval, for now on one seed
+    # max_nfe = 200 #20000
+    # depths = [2, 3, 4, 5, 6]
+    # epsilons = np.array([0.05, 0.05, 0.05])
+    # gammas = [3, 4, 5]
+    # tau = 0.02
+    # restart_intervals = [500, 2000, 5000]
+    # seed = 42
+    # for depth in depths:
+    #     for gamma in gammas:
+    #         for restart_interval in restart_intervals:
+    #             RICE_ForestBorg_continuous(save_location, seed, max_nfe, depth, epsilons, gamma, tau,
+    #                                        restart_interval)
+    #
+    # # -- IV & V -- Use a seed from experiment I & II
 
 
 
